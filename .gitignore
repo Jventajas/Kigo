@@ -1,0 +1,21 @@
+# Environments
+venv/
+.env/
+.venv/
+env/
+ENV/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# IDE
+.idea/
+*.iml
+
+# Misc
+.specs
+.env
