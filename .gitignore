@@ -19,3 +19,8 @@ build/
 # Misc
 specs/
 .env
+
+# Genearated folders
+checkpoints/
+data/
+wandb/
