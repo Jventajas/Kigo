@@ -10,6 +10,10 @@ import numpy as np
 import tiktoken
 from datasets import load_dataset
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 
 class SplitState(TypedDict):
     dir: Path

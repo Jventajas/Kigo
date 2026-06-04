@@ -4,6 +4,7 @@ venv/
 .venv/
 env/
 ENV/
+.env
 
 # Python
 __pycache__/
@@ -18,7 +19,6 @@ build/
 
 # Misc
 specs/
-.env
 
 # Genearated folders
 checkpoints/
