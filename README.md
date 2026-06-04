@@ -36,50 +36,46 @@ Training uses a mix of **FineWeb-Edu** (high-quality educational text) and **The
 
 ### Download training data
 
-```bash
-# FineWeb-Edu (1.6B tokens)
-uv run python scripts/tokenize_data.py \
-    --dataset HuggingFaceFW/fineweb-edu \
-    --split train \
-    --num-tokens 1600000000 \
-    --output-dir ./data/train/fineweb-edu
+One command per corpus. `--train-tokens` is required; `--val-tokens` and `--test-tokens` are optional. Output defaults to `./data/`, with each dataset auto-organized into its own subdirectory.
 
-# The Stack v2 code (400M tokens)
-uv run python scripts/tokenize_data.py \
+```bash
+# FineWeb-Edu
+uv run scripts/tokenize_data.py \
+    --dataset HuggingFaceFW/fineweb-edu \
+    --train-tokens 1_600_000_000 \
+    --val-tokens 20_000_000 \
+    --test-tokens 20_000_000
+
+# The Stack v2
+uv run scripts/tokenize_data.py \
     --dataset bigcode/the-stack-v2 \
-    --split train \
     --text-key content \
-    --num-tokens 400000000 \
-    --output-dir ./data/train/the-stack-v2
+    --train-tokens 400_000_000 \
+    --val-tokens 5_000_000 \
+    --test-tokens 5_000_000
 ```
 
-The training script discovers all `.bin` shards under `./data/train/` recursively and mixes them.
-
-### Download validation data
-
-```bash
-uv run python scripts/tokenize_data.py \
-    --dataset HuggingFaceFW/fineweb-edu \
-    --split train \
-    --num-tokens 10000000 \
-    --output-dir ./data/val
+This creates:
+```
+data/
+├── fineweb-edu/
+│   ├── train/
+│   │   ├── data_000.bin
+│   │   └── meta.json
+│   ├── val/
+│   │   └── ...
+│   └── test/
+│       └── ...
+└── the-stack-v2/
+    ├── train/
+    │   └── ...
+    ├── val/
+    │   └── ...
+    └── test/
+        └── ...
 ```
 
-Validation data is kept separate to track overfitting and generalization.
-
-### Download all splits at once
-
-Some datasets expose predefined splits. To download every split into its own subdirectory:
-
-```bash
-uv run python scripts/tokenize_data.py \
-    --dataset some-dataset \
-    --split all \
-    --num-tokens 1000000 \
-    --output-dir ./data/some-dataset
-```
-
-This creates `./data/some-dataset/train/`, `./data/some-dataset/test/`, etc. You decide which splits to use for training and which for evaluation.
+The training script discovers all `train/` directories recursively and mixes them. `val/` directories are evaluated separately during training to track per-domain perplexity (text vs. code). `test/` directories are evaluated once at the end for a final per-domain perplexity number.
 
 ## Training
 
