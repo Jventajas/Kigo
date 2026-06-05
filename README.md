@@ -42,17 +42,9 @@ One command per corpus. `--train-tokens` is required; `--val-tokens` and `--test
 # FineWeb-Edu
 uv run scripts/prepare_dataset.py \
     --dataset HuggingFaceFW/fineweb-edu \
-    --train-tokens 1_600_000_000 \
+    --train-tokens 2_000_000_000 \
     --val-tokens 20_000_000 \
     --test-tokens 20_000_000
-
-# The Stack v2
-uv run scripts/prepare_dataset.py \
-    --dataset bigcode/the-stack-v2 \
-    --text-key content \
-    --train-tokens 400_000_000 \
-    --val-tokens 5_000_000 \
-    --test-tokens 5_000_000
 ```
 
 This creates:
