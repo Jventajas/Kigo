@@ -40,14 +40,14 @@ One command per corpus. `--train-tokens` is required; `--val-tokens` and `--test
 
 ```bash
 # FineWeb-Edu
-uv run scripts/tokenize_data.py \
+uv run scripts/prepare_dataset.py \
     --dataset HuggingFaceFW/fineweb-edu \
     --train-tokens 1_600_000_000 \
     --val-tokens 20_000_000 \
     --test-tokens 20_000_000
 
 # The Stack v2
-uv run scripts/tokenize_data.py \
+uv run scripts/prepare_dataset.py \
     --dataset bigcode/the-stack-v2 \
     --text-key content \
     --train-tokens 400_000_000 \
