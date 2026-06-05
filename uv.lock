@@ -458,6 +458,7 @@ dependencies = [
     { name = "datasets" },
     { name = "numpy" },
     { name = "python-dotenv" },
+    { name = "pyyaml" },
     { name = "tiktoken" },
     { name = "torch" },
 ]
@@ -467,6 +468,7 @@ requires-dist = [
     { name = "datasets", specifier = ">=4.8.5" },
     { name = "numpy", specifier = ">=2.4.6" },
     { name = "python-dotenv", specifier = ">=1.2.2" },
+    { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "tiktoken", specifier = ">=0.13.0" },
     { name = "torch", specifier = ">=2.3.0" },
 ]
