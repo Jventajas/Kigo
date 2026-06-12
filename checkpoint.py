@@ -3,6 +3,7 @@
 import json
 import shutil
 import signal
+import types
 from pathlib import Path
 
 import torch
@@ -32,7 +33,7 @@ class CheckpointManager:
         signal.signal(signal.SIGTERM, self._handle_signal)
         signal.signal(signal.SIGINT, self._handle_signal)
 
-    def _handle_signal(self, signum: int, _frame) -> None:
+    def _handle_signal(self, signum: int, _frame: types.FrameType | None) -> None:
         """Set flag so the training loop can write an emergency checkpoint."""
         print(f"\nReceived signal {signum}, preparing emergency checkpoint...")
         self._sigterm_received = True
