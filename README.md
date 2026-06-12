@@ -87,6 +87,19 @@ uv run python train.py --config config/train.yaml
 
 The training script auto-discovers the latest checkpoint and resumes from `step + 1`. W&B logging continues under the same run ID across restarts.
 
+### Tuning `num_workers`
+
+The training script picks a default `DataLoader` worker count based on your platform and host CPU cores, but the real optimum depends on your preprocessing and storage speed. To maximize throughput:
+
+1. Run a short training window (a few hundred steps).
+2. Check accelerator utilization:
+   - **CUDA**: `nvidia-smi dmon` should show the GPU near 100%.
+   - **TPU**: `torch_xla` debug metrics or `xla_device_metrics`.
+3. If utilization is low and the host CPU is busy, increase workers; if the CPU is oversubscribed or step latency spikes, decrease workers.
+4. Sweep a few values (2, 4, 8, 16) and pick the one with the highest stable `tok/s` in the W&B dashboard (`train/tokens_per_sec`).
+
+The default is a safe starting point; the best value is found empirically on your hardware.
+
 ### Platform notes
 
 Kigo is trained on Lightning AI's free tier, which imposes a 4-hour limit per studio session. The training script handles this transparently:
