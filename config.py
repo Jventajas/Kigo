@@ -2,7 +2,7 @@
 
 Usage:
     from config import Config, load_config
-    cfg = load_config("config/train.yaml")
+    cfg = load_config("config/kigo-124m.yaml")
 """
 
 import yaml
@@ -62,6 +62,11 @@ class Config:
     wandb_project: str = "kigo"
     wandb_run_name: str | None = None
 
+    # --- Inference defaults ---
+    temperature: float = 0.8
+    top_k: int = 40
+    max_new_tokens: int = 256
+
     def __post_init__(self):
         if self.d_model % self.n_head != 0:
             raise ValueError(
@@ -106,8 +111,3 @@ def load_config(path: str | Path, base: Config | None = None) -> Config:
         setattr(cfg, key, _coerce_value(cfg_fields[key], value))
 
     return cfg
-
-
-_CONFIG_DIR = Path(__file__).parent / "config"
-DEV = load_config(_CONFIG_DIR / "dev.yaml")
-TRAIN = load_config(_CONFIG_DIR / "train.yaml")

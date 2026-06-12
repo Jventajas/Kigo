@@ -82,7 +82,7 @@ Use a tiny configuration (small model, small batch, few tokens) to iterate quick
 ### Full training run
 
 ```bash
-uv run python train.py --config config/train.yaml
+uv run python train.py --config config/kigo-124m.yaml
 ```
 
 The training script auto-discovers the latest checkpoint and resumes from `step + 1`. W&B logging continues under the same run ID across restarts.
@@ -113,7 +113,7 @@ To run remotely, pass the persistent storage directory:
 
 ```bash
 uv run python train.py \
-    --config config/train.yaml \
+    --config config/kigo-124m.yaml \
     --checkpoint-dir /teamspace/studios/this_studio/checkpoints \
     --data-dir /teamspace/studios/this_studio/data
 ```
