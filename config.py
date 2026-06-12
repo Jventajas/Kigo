@@ -53,9 +53,10 @@ class Config:
     sample_interval: int = 2000
 
     # --- Device & precision ---
-    device: str = "cuda"
-    dtype: str = "float16"
-    compile: bool = True
+    # None = auto-detect best platform / dtype / compile support
+    device: str | None = None
+    dtype: str | None = None
+    compile: bool | None = None
 
     # --- W&B ---
     wandb_project: str = "kigo"
