@@ -13,12 +13,7 @@ from torch.utils.data import Dataset, DataLoader
 
 
 class TokenBuffer:
-    """A flat, concatenated view over multiple memory-mapped uint16 shard files.
-
-    Usage:
-        buffer = TokenBuffer(Path("data/fineweb-edu/train"))
-        token_id = buffer[1_000_000]  # global index across all shards
-    """
+    """A flat, concatenated view over multiple memory-mapped uint16 shard files."""
 
     def __init__(self, shard_dir: Path | str) -> None:
         self.shard_dir = Path(shard_dir)
@@ -43,15 +38,6 @@ class TokenBuffer:
 
     def __len__(self) -> int:
         return self.total_tokens
-
-    def __getitem__(self, global_idx: int) -> int:
-        """Map a global token index to the correct shard and local offset."""
-        if global_idx < 0 or global_idx >= self.total_tokens:
-            raise IndexError(f"Token index {global_idx} out of range [0, {self.total_tokens})")
-
-        shard_idx = int(np.searchsorted(self.cumulative_sizes, global_idx, side="right"))
-        local_idx = global_idx if shard_idx == 0 else global_idx - self.cumulative_sizes[shard_idx - 1]
-        return int(self.shards[shard_idx][local_idx])
 
     def get_slice(self, start: int, length: int) -> NDArray[np.uint16]:
         """Read a contiguous slice of tokens, potentially crossing shard boundaries.
@@ -92,7 +78,6 @@ class MemmapDataset(Dataset):
     def __init__(self, split_dir: Path | str, sequence_length: int) -> None:
         self.buffer = TokenBuffer(split_dir)
         self.sequence_length = sequence_length
-        self.samples_per_shard: list[int] = []
 
         # Each sample needs (sequence_length + 1) tokens:
         # sequence_length inputs and 1 target.
@@ -109,13 +94,12 @@ class MemmapDataset(Dataset):
         return self.num_samples
 
     def __getitem__(self, idx: int) -> torch.Tensor:
-        """Return a LongTensor of shape (sequence_length + 1,)."""
+        """Return a uint16 Tensor of shape (sequence_length + 1,)."""
         tokens_per_sample = self.sequence_length + 1
         start = idx * tokens_per_sample
         token_array = self.buffer.get_slice(start, tokens_per_sample)
-        # Return as uint16 — same width as on disk. The training loop will cast
-        # to int32 (for nn.Embedding) or int64 (for CrossEntropyLoss) on the
-        # GPU, keeping CPU→GPU transfer at 2 bytes per token.
+        # Return as uint16 — same width as on disk. The training loop casts to
+        # int64 before the GPU, keeping CPU→GPU transfer at 2 bytes per token.
         return torch.from_numpy(token_array)
 
 
@@ -127,6 +111,8 @@ def get_dataloader(
     num_workers: int = 4,
     pin_memory: bool = True,
     drop_last: bool = True,
+    prefetch_factor: int | None = None,
+    persistent_workers: bool = False,
 ) -> DataLoader:
     """Create a DataLoader for a single split directory containing .bin shards.
 
@@ -139,18 +125,26 @@ def get_dataloader(
         num_workers: Number of background worker processes for data loading.
         pin_memory: Copy tensors to CUDA pinned memory before returning.
         drop_last: Drop the last incomplete batch.
+        prefetch_factor: Number of batches loaded in advance by each worker.
+            Only used when ``num_workers > 0``.
+        persistent_workers: Whether to keep worker processes alive across
+            epochs. Only used when ``num_workers > 0``.
 
     Returns:
         A DataLoader yielding batches of shape (batch_size, sequence_length + 1).
     """
     dataset = MemmapDataset(split_dir, sequence_length)
 
-    return DataLoader(
-        dataset,
+    kwargs: dict = dict(
+        dataset=dataset,
         batch_size=batch_size,
         shuffle=shuffle,
         num_workers=num_workers,
         pin_memory=pin_memory,
         drop_last=drop_last,
-        persistent_workers=num_workers > 0,
+        persistent_workers=persistent_workers,
     )
+    if prefetch_factor is not None:
+        kwargs["prefetch_factor"] = prefetch_factor
+
+    return DataLoader(**kwargs)
