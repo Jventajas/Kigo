@@ -18,12 +18,11 @@ Stage = Literal["fit", "validate", "test", "predict"]
 class KigoLightningModule(LightningModule):
     """A ``LightningModule`` wrapping the Kigo GPT model."""
 
-    def __init__(self, config: Config, platform: Platform, wandb_run_id: str | None = None) -> None:
+    def __init__(self, config: Config, platform: Platform) -> None:
         super().__init__()
         self.config = config
         self.platform = platform
         self.model = GPT(config)
-        self.wandb_run_id = wandb_run_id
 
         # Runtime state persisted across checkpoints.
         self.best_val_loss = float("inf")
@@ -100,12 +99,10 @@ class KigoLightningModule(LightningModule):
     def on_save_checkpoint(self, checkpoint: dict[str, Any]) -> None:
         checkpoint["best_val_loss"] = self.best_val_loss
         checkpoint["tokens_processed"] = self.tokens_processed
-        checkpoint["wandb_run_id"] = self.wandb_run_id
 
     def on_load_checkpoint(self, checkpoint: dict[str, Any]) -> None:
         self.best_val_loss = checkpoint.get("best_val_loss", float("inf"))
         self.tokens_processed = checkpoint.get("tokens_processed", 0)
-        self.wandb_run_id = checkpoint.get("wandb_run_id")
 
     @torch.no_grad()
     def generate_samples(
