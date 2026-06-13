@@ -67,7 +67,7 @@ class Config:
     top_k: int = 40
     max_new_tokens: int = 256
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if self.d_model % self.n_head != 0:
             raise ValueError(
                 f"d_model ({self.d_model}) must be divisible by n_head ({self.n_head})"
