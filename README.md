@@ -67,9 +67,11 @@ data/
         └── ...
 ```
 
-The training script discovers all `train/` directories recursively and mixes them. `val/` directories are evaluated separately during training to track per-domain perplexity (text vs. code). `test/` directories are evaluated once at the end for a final per-domain perplexity number.
+The training script loads `train/` and `val/` splits from `cfg.data_dir`. Both splits are required.
 
 ## Training
+
+Kigo uses **PyTorch Lightning** for training. The config file controls the model architecture, training hyperparameters, device/precision, and inference defaults.
 
 ### Local development
 
@@ -85,11 +87,11 @@ Use a tiny configuration (small model, small batch, few tokens) to iterate quick
 uv run python train.py --config config/kigo-124m.yaml
 ```
 
-The training script auto-discovers the latest checkpoint and resumes from `step + 1`. W&B logging continues under the same run ID across restarts.
+The trainer auto-discovers `checkpoints/last.ckpt` and resumes from the next step. W&B logging continues under the same run ID across restarts.
 
 ### Tuning `num_workers`
 
-The training script picks a default `DataLoader` worker count based on your platform and host CPU cores, but the real optimum depends on your preprocessing and storage speed. To maximize throughput:
+The `Platform` helper picks a default `DataLoader` worker count based on your accelerator and host CPU cores, but the real optimum depends on your preprocessing and storage speed. To maximize throughput:
 
 1. Run a short training window (a few hundred steps).
 2. Check accelerator utilization:
@@ -104,35 +106,36 @@ The default is a safe starting point; the best value is found empirically on you
 
 Kigo is trained on Lightning AI's free tier, which imposes a 4-hour limit per studio session. The training script handles this transparently:
 
-- **Automatic checkpointing** every 500 steps to persistent storage (`/teamspace/studios/this_studio/`).
+- **Automatic checkpointing** every `checkpoint_interval` steps via PyTorch Lightning `ModelCheckpoint`.
 - **SIGTERM handler** catches the platform's pre-kill signal and writes an emergency checkpoint before exiting cleanly.
-- **Resume on restart** — when you restart the studio and re-run the script, it picks up from the latest checkpoint without manual intervention.
+- **Resume on restart** — when you restart the studio and re-run the script, it picks up from `last.ckpt` without manual intervention.
 - **W&B continuity** — logging resumes under the same run ID across sessions.
 
-To run remotely, pass the persistent storage directory:
+To run remotely, set the checkpoint and data directories in your config (or edit `config/kigo-124m.yaml`):
 
-```bash
-uv run python train.py \
-    --config config/kigo-124m.yaml \
-    --checkpoint-dir /teamspace/studios/this_studio/checkpoints \
-    --data-dir /teamspace/studios/this_studio/data
+```yaml
+data_dir: /teamspace/studios/this_studio/data
+checkpoint_dir: /teamspace/studios/this_studio/checkpoints
 ```
 
 ## Project Structure
 
 ```
-├── train.py              # Main training loop, resume logic, W&B logging
+├── train.py              # Training orchestrator (PyTorch Lightning Trainer)
 ├── nn/                   # Model architecture
 │   ├── model.py          # GPT assembly
+│   ├── lightning_module.py  # PyTorch Lightning module
 │   ├── layers.py         # Attention + MLP blocks
 │   ├── embeddings.py     # Token + RoPE
 │   ├── activations.py    # SwiGLU
 │   ├── norm.py           # RMSNorm
 │   └── init.py           # Weight initialization
-├── data.py               # Memmap DataLoader, mixing, streaming
-├── checkpoint.py         # Save/resume/cleanup, SIGTERM handler
-├── eval.py               # Validation, benchmarks, generation
+├── data.py               # Memmap Dataset
+├── data_module.py        # PyTorch Lightning data module
+├── callbacks.py          # Throughput, sampling, emergency checkpoint callbacks
+├── eval.py               # Text generation utilities
 ├── config.py             # Hyperparameters and model config
+├── accelerator.py        # Platform detection and DataLoader tuning
 ├── scripts/
 │   ├── tokenize_data.py  # Dataset preprocessing
 │   └── run_eval.py       # Standalone evaluation
