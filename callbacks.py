@@ -17,6 +17,19 @@ from config import Config
 
 Stage = Literal["fit", "validate", "test", "predict"]
 
+DEFAULT_PROMPTS = [
+    "The capital of France is",
+    "The quick brown fox",
+    "Once upon a time",
+    "def factorial(n):",
+    "In Spanish, 'hello' is",
+    "The theory of relativity states that",
+    "To make a cake, you need",
+    "The Great Depression began in",
+    "import numpy as np\n",
+    "The mitochondria is the powerhouse of",
+]
+
 
 class ThroughputMemoryCallback(Callback):
     """Log throughput (tok/s), learning rate, and device memory at intervals."""
@@ -84,6 +97,7 @@ class SampleGenerationCallback(Callback):
             return
 
         samples = pl_module.generate_samples(
+            prompts=DEFAULT_PROMPTS,
             max_new_tokens=self.config.max_new_tokens,
             temperature=self.config.temperature,
             top_k=self.config.top_k,
