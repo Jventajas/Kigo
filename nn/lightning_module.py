@@ -9,7 +9,6 @@ from lightning.pytorch import LightningModule
 
 from accelerator import Platform
 from config import Config
-from eval import DEFAULT_PROMPTS
 from nn.model import GPT
 
 Stage = Literal["fit", "validate", "test", "predict"]
@@ -107,15 +106,12 @@ class KigoLightningModule(LightningModule):
     @torch.no_grad()
     def generate_samples(
         self,
+        prompts: list[str],
         max_new_tokens: int,
         temperature: float,
         top_k: int,
-        prompts: list[str] | None = None,
     ) -> list[dict[str, str]]:
         """Generate text samples from the model."""
-        if prompts is None:
-            prompts = DEFAULT_PROMPTS
-
         tokenizer = tiktoken.get_encoding("gpt2")
         self.eval()
         results: list[dict[str, str]] = []
