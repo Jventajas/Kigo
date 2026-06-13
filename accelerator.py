@@ -1,8 +1,4 @@
-"""Hardware platform detection and throughput optimization.
-
-Automatically selects the best available accelerator and configures PyTorch
-for maximum performance on that platform.  Callers never touch raw device
-strings or AMP configuration — they ask the :class:`Platform` object.
+"""Platform detection and Lightning-agnostic performance tuning.
 
 Priority: CUDA → TPU → MPS → CPU
 """
@@ -12,6 +8,8 @@ from dataclasses import dataclass
 from typing import Literal
 
 import torch
+
+from config import _Precision
 
 try:
     import torch_xla
@@ -24,68 +22,10 @@ except ImportError:
 
 @dataclass(frozen=True, slots=True)
 class Platform:
-    """Immutable descriptor for the compute platform we are running on.
-
-    Usage::
-
-        plat = get_platform()
-        model = GPT(cfg).to(plat.device)
-        if plat.supports_grad_scaler:
-            scaler = torch.cuda.amp.GradScaler()
-        loader = get_dataloader(..., pin_memory=plat.pin_memory,
-                                num_workers=plat.num_workers)
-    """
+    """Immutable descriptor for the compute platform we are running on."""
 
     device: torch.device
     name: Literal["cuda", "tpu", "mps", "cpu"]
-
-
-    @property
-    def supports_amp(self) -> bool:
-        """Whether ``torch.autocast`` is beneficial and safe on this platform."""
-        return self.name in ("cuda", "tpu")
-
-    @property
-    def supports_grad_scaler(self) -> bool:
-        """Whether to apply gradient scaling.
-
-        Only pre-Ampere CUDA needs it — float16 underflows, bfloat16 doesn't.
-        """
-        if self.name == "cuda":
-            major, _minor = torch.cuda.get_device_capability(self.device)
-            return major < 8
-        return False
-
-    @property
-    def amp_dtype(self) -> torch.dtype:
-        """Recommended dtype to pass to ``torch.autocast``.
-
-        * CUDA Ampere+ (sm80+) → ``bfloat16`` (wider dynamic range, same speed).
-        * CUDA older          → ``float16``.
-        * MPS / CPU           → ``float32`` (autocast disabled).
-        """
-        if self.name == "cuda":
-            major, _minor = torch.cuda.get_device_capability(self.device)
-            return torch.bfloat16 if major >= 8 else torch.float16
-        if self.name == "tpu":
-            return torch.bfloat16
-        return torch.float32
-
-    @property
-    def supports_compile(self) -> bool:
-        """Whether ``torch.compile`` is expected to improve throughput.
-
-        CUDA and CPU use the default Inductor backend. TPU uses the XLA/OpenXLA
-        backend. MPS is not supported by ``torch.compile`` as of PyTorch 2.x.
-        """
-        return self.name in ("cuda", "cpu", "tpu")
-
-    def compile_model(self, model: torch.nn.Module) -> torch.nn.Module:
-        """Compile *model* for this platform's backend."""
-        if self.name == "tpu":
-            # torch.compile's return type is loosely annotated by PyTorch.
-            return torch.compile(model, backend="openxla")  # type: ignore[return-value]
-        return torch.compile(model)  # type: ignore[return-value]
 
     @property
     def pin_memory(self) -> bool:
@@ -118,7 +58,16 @@ class Platform:
         """Whether to keep DataLoader worker processes alive."""
         return self.num_workers > 0
 
-    # Global optimizations
+    @property
+    def default_precision(self) -> _Precision:
+        """Best Lightning precision for this platform."""
+        if self.name == "cuda":
+            major, _ = torch.cuda.get_device_capability(self.device)
+            return "bf16-mixed" if major >= 8 else "16-mixed"
+        if self.name == "tpu":
+            return "bf16-mixed"
+        return "32-true"
+
     def optimize(self) -> None:
         """Apply once-per-process PyTorch settings for this platform."""
         if self.name == "cuda":
@@ -145,20 +94,6 @@ class Platform:
         elif self.name == "tpu" and HAS_XLA:
             # XLA handles its own thread pool; leave PyTorch threads alone.
             pass
-
-    # Helpers
-    def sync(self) -> None:
-        """Block until all queued ops on *device* have finished.
-
-        No-op on CPU.  Useful for accurate timing.
-        """
-        if self.name == "cuda":
-            torch.cuda.synchronize(self.device)
-        elif self.name == "mps":
-            torch.mps.synchronize()
-        elif self.name == "tpu" and HAS_XLA:
-            xm.mark_step()
-            xm.wait_device_ops()
 
     def reset_peak_memory(self) -> None:
         """Reset peak memory stats so the next query is fresh.
@@ -188,10 +123,8 @@ class Platform:
 
     def __str__(self) -> str:
         return (
-            f"Platform({self.name}, device={self.device}, "
-            f"amp={self.supports_amp}({self.amp_dtype}), "
-            f"scaler={self.supports_grad_scaler}, "
-            f"compile={self.supports_compile}, workers={self.num_workers})"
+            f"Platform({self.name}, device={self.device!s}, "
+            f"workers={self.num_workers})"
         )
 
 

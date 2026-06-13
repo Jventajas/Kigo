@@ -8,7 +8,10 @@ Usage:
 import yaml
 from dataclasses import dataclass, field, fields
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
+
+
+_Precision = Literal["16-mixed", "bf16-mixed", "32-true"]
 
 
 @dataclass
@@ -55,7 +58,7 @@ class Config:
     # --- Device & precision ---
     # None = auto-detect best platform / dtype / compile support
     device: str | None = None
-    dtype: str | None = None
+    dtype: _Precision | None = None
     compile: bool | None = None
 
     # --- W&B ---
