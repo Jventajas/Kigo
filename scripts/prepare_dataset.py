@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-"""Tokenize a HuggingFace dataset and write uint16 binary shards."""
+"""Tokenize a HuggingFace dataset and write uint32 binary shards."""
 
 import os
 import sys
 import argparse
-import tiktoken
 import numpy as np
 
 from tqdm import tqdm
@@ -12,6 +11,7 @@ from pathlib import Path
 from typing import TypedDict
 from dotenv import load_dotenv
 from datasets import load_dataset
+from transformers import AutoTokenizer
 
 load_dotenv()  # loads HF_TOKEN from .env for gated datasets
 
@@ -83,7 +83,7 @@ class SplitFiller:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Tokenize a dataset into uint16 shards.")
+    parser = argparse.ArgumentParser(description="Tokenize a dataset into uint32 shards.")
     parser.add_argument("--dataset", type=str, required=True, help="HuggingFace dataset name.")
     parser.add_argument("--dataset-config", type=str, default="sample-10BT", help="Dataset config name (default: sample-10BT).")
     parser.add_argument("--dataset-split", type=str, default="train", help="Dataset split to stream (default: train).")
@@ -93,6 +93,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--test-tokens", type=int, default=None, help="Number of test tokens.")
     parser.add_argument("--shard-size", type=int, default=100_000_000, help="Tokens per shard.")
     parser.add_argument("--output-dir", type=Path, default=Path("data"), help="Directory to write splits (default: ./data).")
+    parser.add_argument("--tokenizer", type=str, default="NousResearch/Meta-Llama-3-8B", help="HuggingFace tokenizer name.")
     return parser.parse_args()
 
 
@@ -100,7 +101,7 @@ def make_split(dir: Path, target: int, shard_size: int) -> SplitState:
     """Create a fresh split state with an empty shard buffer."""
     return {
         "dir": dir,
-        "buf": np.empty(shard_size, dtype=np.uint16),
+        "buf": np.empty(shard_size, dtype=np.uint32),
         "buf_pos": 0,
         "count": 0,
         "shard_index": 0,
@@ -133,7 +134,7 @@ def flush_shard(split: SplitState) -> None:
 def flatten_batch(batch_tokens: list[list[int]], eot: int) -> np.ndarray:
     """Concatenate tokenized documents with an EOT token after each."""
     batch_len = sum(len(d) + 1 for d in batch_tokens)
-    batch_arr = np.empty(batch_len, dtype=np.uint16)
+    batch_arr = np.empty(batch_len, dtype=np.uint32)
     pos = 0
     for doc_tokens in batch_tokens:
         n = len(doc_tokens)
@@ -169,8 +170,8 @@ def main() -> None:
     for split in splits.values():
         split["dir"].mkdir(parents=True, exist_ok=True)
 
-    enc = tiktoken.get_encoding("gpt2")
-    eot = enc.eot_token
+    enc = AutoTokenizer.from_pretrained(args.tokenizer)
+    eot = enc.eos_token_id
 
     print(f"Streaming {args.dataset} ...")
     stream = load_dataset(args.dataset, args.dataset_config, streaming=True, split=args.dataset_split)
@@ -189,9 +190,8 @@ def main() -> None:
             if filler.all_full():
                 break
 
-            batch_tokens = enc.encode_ordinary_batch(
-                batch[args.text_key], num_threads=os.cpu_count() or 8
-            )
+            encoded = enc(batch[args.text_key], add_special_tokens=False)
+            batch_tokens = encoded["input_ids"]
             batch_arr = flatten_batch(batch_tokens, eot)
 
             pos = 0

@@ -1,5 +1,11 @@
 # Tiny config for local iteration on CPU / small GPU.
 data_dir: data/fineweb-edu
+
+# --- Tokenizer ---
+tokenizer_name: NousResearch/Meta-Llama-3-8B
+
+# --- Model architecture ---
+vocab_size: 128256
 n_layer: 2
 n_head: 2
 d_model: 128

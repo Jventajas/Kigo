@@ -6,8 +6,11 @@
 data_dir: data/fineweb-edu
 checkpoint_dir: checkpoints
 
+# --- Tokenizer ---
+tokenizer_name: NousResearch/Meta-Llama-3-8B
+
 # --- Model architecture ---
-vocab_size: 50257
+vocab_size: 128256
 n_layer: 12
 n_head: 12
 d_model: 768
@@ -22,14 +25,14 @@ rope_max_length: 2048
 
 batch_size: 8
 global_batch_size: 512
-max_steps: 4000
+max_steps: 8000
 learning_rate: 0.0006
 min_lr: 0.00006
-warmup_steps: 2000
+warmup_steps: 200
 weight_decay: 0.1
 grad_clip: 1.0
 checkpoint_interval: 500
-eval_interval: 1000
+eval_interval: 500
 log_interval: 10
 sample_interval: 2000
 

@@ -3,9 +3,9 @@
 import math
 from typing import Any, Literal
 
-import tiktoken
 import torch
 from lightning.pytorch import LightningModule
+from transformers import AutoTokenizer
 
 from accelerator import Platform
 from config import Config
@@ -22,6 +22,7 @@ class KigoLightningModule(LightningModule):
         self.config = config
         self.platform = platform
         self.model = GPT(config)
+        self.tokenizer = AutoTokenizer.from_pretrained(config.tokenizer_name)
 
         # Runtime state persisted across checkpoints.
         self.best_val_loss = float("inf")
@@ -38,7 +39,7 @@ class KigoLightningModule(LightningModule):
     def transfer_batch_to_device(
         self, batch: torch.Tensor, device: torch.device, dataloader_idx: int
     ) -> torch.Tensor:
-        # Keep CPU→GPU transfer at 2 bytes/token, then cast to int64 for Embedding.
+        # Transfer uint32 tokens to GPU, then cast to int64 for Embedding.
         return batch.to(device, non_blocking=self.platform.non_blocking).long()
 
     def forward(
@@ -112,12 +113,11 @@ class KigoLightningModule(LightningModule):
         top_k: int,
     ) -> list[dict[str, str]]:
         """Generate text samples from the model."""
-        tokenizer = tiktoken.get_encoding("gpt2")
         self.eval()
         results: list[dict[str, str]] = []
 
         for prompt_text in prompts:
-            token_ids = tokenizer.encode(prompt_text, allowed_special="all")
+            token_ids = self.tokenizer.encode(prompt_text, add_special_tokens=False)
             tokens = torch.tensor([token_ids], dtype=torch.long, device=self.device)
             generated = self.model.generate(
                 tokens,
@@ -125,7 +125,7 @@ class KigoLightningModule(LightningModule):
                 temperature=temperature,
                 top_k=top_k,
             )
-            output_text = tokenizer.decode(generated[0].tolist())
+            output_text = self.tokenizer.decode(generated[0].tolist(), skip_special_tokens=True)
             results.append({"prompt": prompt_text, "output": output_text})
 
         self.train()

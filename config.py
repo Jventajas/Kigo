@@ -18,8 +18,11 @@ _Precision = Literal["16-mixed", "bf16-mixed", "32-true"]
 class Config:
     """Single source of truth for model architecture and training hyperparameters."""
 
+    # --- Tokenizer ---
+    tokenizer_name: str = "NousResearch/Meta-Llama-3-8B"
+
     # --- Model architecture ---
-    vocab_size: int = 50257
+    vocab_size: int = 128256
     n_layer: int = 12
     n_head: int = 12
     d_model: int = 768

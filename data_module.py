@@ -13,7 +13,7 @@ Stage = Literal["fit", "validate", "test", "predict"]
 
 
 class KigoDataModule(LightningDataModule):
-    """Builds train/val/test DataLoaders from memory-mapped uint16 token shards."""
+    """Builds train/val/test DataLoaders from memory-mapped uint32 token shards."""
 
     def __init__(self, config: Config, platform: Platform) -> None:
         super().__init__()

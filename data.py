@@ -1,6 +1,6 @@
-"""Memory-mapped dataloader for uint16 token shards.
+"""Memory-mapped dataloader for uint32 token shards.
 
-Each shard is a flat array of uint16 token IDs. Shards are concatenated logically
+Each shard is a flat array of uint32 token IDs. Shards are concatenated logically
 into a single token stream, then sliced into fixed-length sequences for training.
 """
 
@@ -13,7 +13,7 @@ from torch.utils.data import Dataset, DataLoader
 
 
 class TokenBuffer:
-    """A flat, concatenated view over multiple memory-mapped uint16 shard files."""
+    """A flat, concatenated view over multiple memory-mapped uint32 shard files."""
 
     def __init__(self, shard_dir: Path | str) -> None:
         self.shard_dir = Path(shard_dir)
@@ -24,12 +24,12 @@ class TokenBuffer:
         if not self.shard_paths:
             raise ValueError(f"No *.bin shards found in {self.shard_dir}")
 
-        self.shards: list[NDArray[np.uint16]] = []
+        self.shards: list[NDArray[np.uint32]] = []
         self.cumulative_sizes: list[int] = []
         total_tokens = 0
 
         for path in self.shard_paths:
-            shard = np.memmap(path, dtype=np.uint16, mode="r")
+            shard = np.memmap(path, dtype=np.uint32, mode="r")
             self.shards.append(shard)
             total_tokens += len(shard)
             self.cumulative_sizes.append(total_tokens)
@@ -39,7 +39,7 @@ class TokenBuffer:
     def __len__(self) -> int:
         return self.total_tokens
 
-    def get_slice(self, start: int, length: int) -> NDArray[np.uint16]:
+    def get_slice(self, start: int, length: int) -> NDArray[np.uint32]:
         """Read a contiguous slice of tokens, potentially crossing shard boundaries.
 
         This is more efficient than repeated __getitem__ calls because it
@@ -50,7 +50,7 @@ class TokenBuffer:
                 f"Slice [{start}:{start + length}) out of range [0, {self.total_tokens})"
             )
 
-        tokens = cast(NDArray[np.uint16], np.empty(length, dtype=np.uint16))
+        tokens = cast(NDArray[np.uint32], np.empty(length, dtype=np.uint32))
         written = 0
 
         while written < length:
@@ -94,12 +94,12 @@ class MemmapDataset(Dataset):
         return self.num_samples
 
     def __getitem__(self, idx: int) -> torch.Tensor:
-        """Return a uint16 Tensor of shape (sequence_length + 1,)."""
+        """Return a uint32 Tensor of shape (sequence_length + 1,)."""
         tokens_per_sample = self.sequence_length + 1
         start = idx * tokens_per_sample
         token_array = self.buffer.get_slice(start, tokens_per_sample)
-        # Return as uint16 — same width as on disk. The training loop casts to
-        # int64 before the GPU, keeping CPU→GPU transfer at 2 bytes per token.
+        # Return as uint32 — same width as on disk. The training loop casts to
+        # int64 before the GPU.
         return torch.from_numpy(token_array)
 
 
@@ -117,7 +117,7 @@ def get_dataloader(
     """Create a DataLoader for a single split directory containing .bin shards.
 
     Args:
-        split_dir: Path to a directory containing *.bin uint16 shards.
+        split_dir: Path to a directory containing *.bin uint32 shards.
         sequence_length: Number of input tokens per sequence. Each sample will
             be (sequence_length + 1) tokens to provide targets.
         batch_size: Number of sequences per batch.
