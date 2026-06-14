@@ -2,7 +2,7 @@
 
 Usage:
     from config import Config, load_config
-    cfg = load_config("config/kigo-124m.yaml")
+    cfg = load_config("config/kigo-162m.yaml")
 """
 
 import yaml

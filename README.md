@@ -84,7 +84,7 @@ Use a tiny configuration (small model, small batch, few tokens) to iterate quick
 ### Full training run
 
 ```bash
-uv run python train.py --config config/kigo-124m.yaml
+uv run python train.py --config config/kigo-162m.yaml
 ```
 
 The trainer auto-discovers `checkpoints/last.ckpt` and resumes from the next step. W&B logging continues under the same run ID across restarts.
@@ -111,7 +111,7 @@ Kigo is trained on Lightning AI's free tier, which imposes a 4-hour limit per st
 - **Resume on restart** — when you restart the studio and re-run the script, it picks up from `last.ckpt` without manual intervention.
 - **W&B continuity** — logging resumes under the same run ID across sessions.
 
-To run remotely, set the checkpoint and data directories in your config (or edit `config/kigo-124m.yaml`):
+To run remotely, set the checkpoint and data directories in your config (or edit `config/kigo-162m.yaml`):
 
 ```yaml
 data_dir: /teamspace/studios/this_studio/data
