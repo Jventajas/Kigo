@@ -44,6 +44,7 @@ uv run scripts/prepare_dataset.py \
     --dataset HuggingFaceFW/fineweb-edu \
     --train-tokens 2_000_000_000 \
     --val-tokens 20_000_000 \
+    --test-tokens 20_000_000 \
     --test-tokens 20_000_000
 ```
 

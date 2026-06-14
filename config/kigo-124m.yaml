@@ -2,6 +2,24 @@
 # This config is shared between training and inference so the architecture
 # always matches the checkpoint.
 
+# --- Paths ---
+data_dir: data/fineweb-edu
+checkpoint_dir: checkpoints
+
+# --- Model architecture ---
+vocab_size: 50257
+n_layer: 12
+n_head: 12
+d_model: 768
+d_ff: 2048
+block_size: 1024
+dropout: 0.0
+bias: False
+
+# --- RoPE ---
+rope_base: 10000.0
+rope_max_length: 2048
+
 batch_size: 8
 global_batch_size: 512
 max_steps: 4000
