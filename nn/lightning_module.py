@@ -5,7 +5,7 @@ from typing import Any, Literal
 
 import torch
 from lightning.pytorch import LightningModule
-from transformers import AutoTokenizer
+from transformers import AutoTokenizer, PreTrainedTokenizerFast
 
 from accelerator import Platform
 from config import Config
@@ -22,7 +22,10 @@ class KigoLightningModule(LightningModule):
         self.config = config
         self.platform = platform
         self.model = GPT(config)
-        self.tokenizer = AutoTokenizer.from_pretrained(config.tokenizer_name)
+        try:
+            self.tokenizer = AutoTokenizer.from_pretrained(config.tokenizer_name)
+        except Exception:
+            self.tokenizer = PreTrainedTokenizerFast.from_pretrained(config.tokenizer_name)
 
         # Runtime state persisted across checkpoints.
         self.best_val_loss = float("inf")

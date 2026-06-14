@@ -2,10 +2,10 @@
 data_dir: data/fineweb-edu
 
 # --- Tokenizer ---
-tokenizer_name: NousResearch/Meta-Llama-3-8B
+tokenizer_name: unsloth/Llama-4-Scout-17B-16E-Instruct-unsloth-bnb-4bit
 
 # --- Model architecture ---
-vocab_size: 128256
+vocab_size: 202048
 n_layer: 2
 n_head: 2
 d_model: 128

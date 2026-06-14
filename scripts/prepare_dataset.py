@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import TypedDict
 from dotenv import load_dotenv
 from datasets import load_dataset
-from transformers import AutoTokenizer
+from transformers import AutoTokenizer, PreTrainedTokenizerFast
 
 load_dotenv()  # loads HF_TOKEN from .env for gated datasets
 
@@ -93,7 +93,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--test-tokens", type=int, default=None, help="Number of test tokens.")
     parser.add_argument("--shard-size", type=int, default=100_000_000, help="Tokens per shard.")
     parser.add_argument("--output-dir", type=Path, default=Path("data"), help="Directory to write splits (default: ./data).")
-    parser.add_argument("--tokenizer", type=str, default="NousResearch/Meta-Llama-3-8B", help="HuggingFace tokenizer name.")
+    parser.add_argument("--tokenizer", type=str, default="unsloth/Llama-4-Scout-17B-16E-Instruct-unsloth-bnb-4bit", help="HuggingFace tokenizer name.")
     return parser.parse_args()
 
 
@@ -170,7 +170,13 @@ def main() -> None:
     for split in splits.values():
         split["dir"].mkdir(parents=True, exist_ok=True)
 
-    enc = AutoTokenizer.from_pretrained(args.tokenizer)
+    try:
+        enc = AutoTokenizer.from_pretrained(args.tokenizer)
+    except Exception:
+        # Some model configs (e.g. Llama-4) have schema issues that prevent
+        # AutoTokenizer from loading the model config. Fall back to loading
+        # only the tokenizer files directly.
+        enc = PreTrainedTokenizerFast.from_pretrained(args.tokenizer)
     eot = enc.eos_token_id
 
     print(f"Streaming {args.dataset} ...")
