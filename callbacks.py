@@ -1,9 +1,8 @@
 """PyTorch Lightning callbacks for Kigo training."""
 
-import signal
 import time
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
 import torch
 import wandb
@@ -14,8 +13,6 @@ from lightning.pytorch.utilities.rank_zero import rank_zero_info
 
 from accelerator import Platform
 from config import Config
-
-Stage = Literal["fit", "validate", "test", "predict"]
 
 DEFAULT_PROMPTS = [
     "The capital of France is",
@@ -116,36 +113,3 @@ class SampleGenerationCallback(Callback):
                 for sample in samples:
                     table.add_data(step, sample["prompt"], sample["output"])
                 logger.experiment.log({"samples": table}, step=step)
-
-
-class EmergencyCheckpointCallback(Callback):
-    """Write an emergency checkpoint when SIGTERM or SIGINT is received."""
-
-    def __init__(self, checkpoint_dir: Path) -> None:
-        super().__init__()
-        self.checkpoint_dir = Path(checkpoint_dir)
-        self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
-        self._signal_received = False
-
-    def setup(self, trainer: Trainer, pl_module: Any, stage: Stage | None = None) -> None:
-        signal.signal(signal.SIGTERM, self._handle_signal)
-        signal.signal(signal.SIGINT, self._handle_signal)
-
-    def _handle_signal(self, signum: int, _frame: Any) -> None:
-        rank_zero_info(f"\nReceived signal {signum}, preparing emergency checkpoint...")
-        self._signal_received = True
-
-    def on_train_batch_end(
-        self, trainer: Trainer, pl_module: Any, outputs: Any, batch: Any, batch_idx: int
-    ) -> None:
-        if not self._signal_received:
-            return
-        self._save_emergency_checkpoint(trainer)
-        trainer.should_stop = True
-
-    @rank_zero_only
-    def _save_emergency_checkpoint(self, trainer: Trainer) -> None:
-        step = trainer.global_step
-        path = self.checkpoint_dir / f"checkpoint_step_{step}_emergency.ckpt"
-        rank_zero_info(f"  → Writing emergency checkpoint to {path}")
-        trainer.save_checkpoint(path)
