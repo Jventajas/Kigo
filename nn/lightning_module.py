@@ -86,13 +86,13 @@ class KigoLightningModule(LightningModule):
         )
 
         min_lr_ratio = self.config.min_lr / self.config.learning_rate
+        total_steps = self.trainer.estimated_stepping_batches
+        warmup_steps = self.config.warmup_steps
 
         def lr_lambda(step: int) -> float:
-            if step < self.config.warmup_steps:
-                return step / self.config.warmup_steps
-            progress = (step - self.config.warmup_steps) / (
-                    self.config.max_steps - self.config.warmup_steps
-            )
+            if step < warmup_steps:
+                return step / warmup_steps
+            progress = (step - warmup_steps) / (total_steps - warmup_steps)
             return min_lr_ratio + (1.0 - min_lr_ratio) * 0.5 * (1.0 + math.cos(math.pi * progress))
 
         scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)

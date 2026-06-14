@@ -12,7 +12,6 @@ from lightning.pytorch.loggers import WandbLogger
 
 from accelerator import get_platform
 from callbacks import (
-    EmergencyCheckpointCallback,
     SampleGenerationCallback,
     ThroughputMemoryCallback,
 )
@@ -75,19 +74,18 @@ def main() -> None:
         checkpoint_callback,
         ThroughputMemoryCallback(config, platform),
         SampleGenerationCallback(config),
-        EmergencyCheckpointCallback(config.checkpoint_dir),
     ]
 
     # Trainer
     trainer = Trainer(
-        max_steps=config.max_steps,
+        max_epochs=config.max_epochs,
         accelerator=platform.name,
         devices=1,
         precision=config.dtype or platform.default_precision,
         accumulate_grad_batches=accumulation_steps,
         gradient_clip_val=config.grad_clip,
         val_check_interval=config.eval_interval,
-        check_val_every_n_epoch=None,
+        check_val_every_n_epoch=1,
         log_every_n_steps=config.log_interval,
         enable_progress_bar=True,
         logger=logger,

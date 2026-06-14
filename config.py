@@ -39,7 +39,7 @@ class Config:
     # --- Training ---
     batch_size: int = 8
     global_batch_size: int = 512
-    max_steps: int = 4000
+    max_epochs: int = 4
     learning_rate: float = 6e-4
     min_lr: float = 6e-5
     warmup_steps: int = 2000
@@ -55,7 +55,7 @@ class Config:
 
     # --- Intervals ---
     checkpoint_interval: int = 500
-    eval_interval: int = 1000
+    eval_interval: float = 0.1
     log_interval: int = 10
     sample_interval: int = 2000
 
