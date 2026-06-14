@@ -2,10 +2,10 @@
 data_dir: data/fineweb-edu
 
 # --- Tokenizer ---
-tokenizer_name: unsloth/Llama-4-Scout-17B-16E-Instruct-unsloth-bnb-4bit
+tokenizer_name: cl100k_base
 
 # --- Model architecture ---
-vocab_size: 202048
+vocab_size: 100277
 n_layer: 2
 n_head: 2
 d_model: 128

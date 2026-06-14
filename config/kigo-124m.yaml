@@ -1,4 +1,6 @@
-# Full model and training config for the 124M Kigo model on FineWeb-Edu.
+# Full model and training config for the ~162M Kigo model on FineWeb-Edu.
+# (cl100k_base vocab raises the embedding/head matrix to ~77M params, so the
+# total sits around 162M.)
 # This config is shared between training and inference so the architecture
 # always matches the checkpoint.
 
@@ -7,10 +9,10 @@ data_dir: data/fineweb-edu
 checkpoint_dir: checkpoints
 
 # --- Tokenizer ---
-tokenizer_name: unsloth/Llama-4-Scout-17B-16E-Instruct-unsloth-bnb-4bit
+tokenizer_name: cl100k_base
 
 # --- Model architecture ---
-vocab_size: 202048
+vocab_size: 100277
 n_layer: 12
 n_head: 12
 d_model: 768

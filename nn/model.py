@@ -13,7 +13,7 @@ from nn.norm import RMSNorm
 
 
 class GPT(nn.Module):
-    """124M-parameter GPT with RoPE, SwiGLU, RMSNorm, and SDPA.
+    """~162M-parameter GPT with RoPE, SwiGLU, RMSNorm, and SDPA.
 
     Follows the Config dataclass for all hyperparameters.
     """
@@ -43,7 +43,8 @@ class GPT(nn.Module):
         self.lm_head = nn.Linear(config.d_model, config.vocab_size, bias=config.bias)
 
         # Weight tying: LM head shares weights with token embedding.
-        # This is standard for GPT-2 and keeps parameter count at ~124M.
+        # This is standard for GPT-style models and keeps the parameter count
+        # at ~162M with the cl100k_base vocab.
         self.token_embedding.weight = self.lm_head.weight
 
         # Base initialization
@@ -98,6 +99,7 @@ class GPT(nn.Module):
         max_new_tokens: int,
         temperature: float = 1.0,
         top_k: int | None = None,
+        eos_token_id: int | None = None,
     ) -> torch.Tensor:
         """Generate tokens autoregressively.
 
@@ -106,11 +108,20 @@ class GPT(nn.Module):
             max_new_tokens: Number of tokens to generate.
             temperature: Sampling temperature. Lower = more deterministic.
             top_k: If set, restrict sampling to the top-k logits.
+            eos_token_id: If set, stop generation per-row as soon as a
+                sequence samples this token. Already-finished rows are
+                padded with ``eos_token_id`` so the output stays rectangular.
 
         Returns:
-            Generated sequence of shape (B, T + max_new_tokens).
+            Generated sequence of shape (B, T + n) where n <= max_new_tokens.
         """
+        B = idx.size(0)
+        finished = torch.zeros((B, 1), dtype=torch.bool, device=idx.device)
+
         for _ in range(max_new_tokens):
+            if finished.all():
+                break
+
             # Crop to block_size context window
             idx_cond = idx if idx.size(1) <= self.config.block_size else idx[
                 :, -self.config.block_size :
@@ -125,7 +136,22 @@ class GPT(nn.Module):
 
             probs = F.softmax(logits, dim=-1)
             idx_next = torch.multinomial(probs, num_samples=1)  # (B, 1)
+
+            # Force already-finished rows to keep emitting EOS so the tensor
+            # stays rectangular and downstream code can mask them out.
+            if eos_token_id is not None:
+                idx_next = torch.where(
+                    finished,
+                    torch.tensor([[eos_token_id]], device=idx.device),
+                    idx_next,
+                )
+
             idx = torch.cat((idx, idx_next), dim=1)
+
+            if eos_token_id is not None:
+                finished = finished | idx_next.eq(eos_token_id)
+
+        return idx
 
         return idx
 

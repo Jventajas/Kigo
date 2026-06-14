@@ -4,8 +4,8 @@ import math
 from typing import Any, Literal
 
 import torch
+import tiktoken
 from lightning.pytorch import LightningModule
-from transformers import AutoTokenizer, PreTrainedTokenizerFast
 
 from accelerator import Platform
 from config import Config
@@ -22,10 +22,9 @@ class KigoLightningModule(LightningModule):
         self.config = config
         self.platform = platform
         self.model = GPT(config)
-        try:
-            self.tokenizer = AutoTokenizer.from_pretrained(config.tokenizer_name)
-        except Exception:
-            self.tokenizer = PreTrainedTokenizerFast.from_pretrained(config.tokenizer_name)
+        enc = tiktoken.get_encoding(config.tokenizer_name)
+        self.eos_token_id = enc.encode_single_token("<|endoftext|>")
+        self.tokenizer = enc
 
         # Runtime state persisted across checkpoints.
         self.best_val_loss = float("inf")
@@ -120,15 +119,17 @@ class KigoLightningModule(LightningModule):
         results: list[dict[str, str]] = []
 
         for prompt_text in prompts:
-            token_ids = self.tokenizer.encode(prompt_text, add_special_tokens=False)
+            token_ids = self.tokenizer.encode_ordinary(prompt_text)
             tokens = torch.tensor([token_ids], dtype=torch.long, device=self.device)
             generated = self.model.generate(
                 tokens,
                 max_new_tokens=max_new_tokens,
                 temperature=temperature,
                 top_k=top_k,
+                eos_token_id=self.eos_token_id,
             )
-            output_text = self.tokenizer.decode(generated[0].tolist(), skip_special_tokens=True)
+            ids = [i for i in generated[0].tolist() if i != self.eos_token_id]
+            output_text = self.tokenizer.decode(ids)
             results.append({"prompt": prompt_text, "output": output_text})
 
         self.train()

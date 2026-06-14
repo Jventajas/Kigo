@@ -1,23 +1,23 @@
 # Kigo
 
-A 124M-parameter language model pretrained from scratch with modern architectural improvements. Small enough to run on-device, capable enough to specialize for precision tasks through fine-tuning.
+A ~162M-parameter language model pretrained from scratch with modern architectural improvements. Small enough to run on-device, capable enough to specialize for precision tasks through fine-tuning.
 
 ## What this is
 
 Most foundation models are too large to run locally or too outdated to perform well. Kigo occupies the gap: a modern, efficient architecture at a parameter count that fits consumer hardware, pretrained on high-quality data so it can be fine-tuned effectively for specific domains.
 
-The architecture swaps four components of the classic GPT-2 small for their modern equivalents — RoPE, SwiGLU, RMSNorm, and SDPA attention — without increasing parameter count. The result trains more stably, converges faster, and produces better representations at the same 124M scale.
+The architecture combines four modern components — RoPE, SwiGLU, RMSNorm, and SDPA attention — to train more stably, converge faster, and produce better representations than an equivalent-parameter vanilla transformer.
 
 ## Architecture
 
 | Parameter | Value |
 |-----------|-------|
-| Parameters | ~124M |
+| Parameters | ~162M |
 | Layers | 12 |
 | Heads | 12 |
 | d_model | 768 |
 | Context length | 1024 |
-| Vocabulary | 50257 (GPT-2 BPE) |
+| Vocabulary | 100277 (cl100k_base) |
 | Positional encoding | RoPE (Rotary Position Embedding) |
 | FFN activation | SwiGLU |
 | Normalization | RMSNorm + Pre-LN |
@@ -44,7 +44,6 @@ uv run scripts/prepare_dataset.py \
     --dataset HuggingFaceFW/fineweb-edu \
     --train-tokens 2_000_000_000 \
     --val-tokens 20_000_000 \
-    --test-tokens 20_000_000 \
     --test-tokens 20_000_000
 ```
 

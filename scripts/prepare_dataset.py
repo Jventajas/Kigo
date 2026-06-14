@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import TypedDict
 from dotenv import load_dotenv
 from datasets import load_dataset
-from transformers import AutoTokenizer, PreTrainedTokenizerFast
+import tiktoken
 
 load_dotenv()  # loads HF_TOKEN from .env for gated datasets
 
@@ -93,7 +93,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--test-tokens", type=int, default=None, help="Number of test tokens.")
     parser.add_argument("--shard-size", type=int, default=100_000_000, help="Tokens per shard.")
     parser.add_argument("--output-dir", type=Path, default=Path("data"), help="Directory to write splits (default: ./data).")
-    parser.add_argument("--tokenizer", type=str, default="unsloth/Llama-4-Scout-17B-16E-Instruct-unsloth-bnb-4bit", help="HuggingFace tokenizer name.")
+    parser.add_argument("--tokenizer", type=str, default="cl100k_base", help="tiktoken encoding name (e.g. cl100k_base).")
     return parser.parse_args()
 
 
@@ -170,14 +170,8 @@ def main() -> None:
     for split in splits.values():
         split["dir"].mkdir(parents=True, exist_ok=True)
 
-    try:
-        enc = AutoTokenizer.from_pretrained(args.tokenizer)
-    except Exception:
-        # Some model configs (e.g. Llama-4) have schema issues that prevent
-        # AutoTokenizer from loading the model config. Fall back to loading
-        # only the tokenizer files directly.
-        enc = PreTrainedTokenizerFast.from_pretrained(args.tokenizer)
-    eot = enc.eos_token_id
+    enc = tiktoken.get_encoding(args.tokenizer)
+    eot = enc.encode_single_token("<|endoftext|>")
 
     print(f"Streaming {args.dataset} ...")
     stream = load_dataset(args.dataset, args.dataset_config, streaming=True, split=args.dataset_split)
@@ -196,8 +190,8 @@ def main() -> None:
             if filler.all_full():
                 break
 
-            encoded = enc(batch[args.text_key], add_special_tokens=False)
-            batch_tokens = encoded["input_ids"]
+            encoded = [enc.encode_ordinary(t) for t in batch[args.text_key]]
+            batch_tokens = encoded
             batch_arr = flatten_batch(batch_tokens, eot)
 
             pos = 0

@@ -19,10 +19,11 @@ class Config:
     """Single source of truth for model architecture and training hyperparameters."""
 
     # --- Tokenizer ---
-    tokenizer_name: str = "unsloth/Llama-4-Scout-17B-16E-Instruct-unsloth-bnb-4bit"
+    # tiktoken encoding name, e.g. "cl100k_base" (GPT-4 family).
+    tokenizer_name: str = "cl100k_base"
 
     # --- Model architecture ---
-    vocab_size: int = 202048
+    vocab_size: int = 100277
     n_layer: int = 12
     n_head: int = 12
     d_model: int = 768
