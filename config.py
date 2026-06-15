@@ -49,10 +49,6 @@ class Config:
     eps: float = 1e-8
     grad_clip: float = 1.0
 
-    # --- Paths ---
-    data_dir: Path = field(default_factory=lambda: Path("data"))
-    checkpoint_dir: Path = field(default_factory=lambda: Path("checkpoints"))
-
     # --- Intervals ---
     checkpoint_interval: int = 500
     eval_interval: float = 0.1

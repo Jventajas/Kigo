@@ -1,6 +1,4 @@
 # Tiny config for local iteration on CPU / small GPU.
-data_dir: data/fineweb-edu
-checkpoint_dir: checkpoints
 
 # --- Tokenizer ---
 tokenizer_name: cl100k_base

@@ -1,5 +1,6 @@
 """PyTorch Lightning data module for Kigo."""
 
+from pathlib import Path
 from typing import Literal
 
 from lightning.pytorch import LightningDataModule
@@ -15,10 +16,11 @@ Stage = Literal["fit", "validate", "test", "predict"]
 class KigoDataModule(LightningDataModule):
     """Builds train/val/test DataLoaders from memory-mapped uint32 token shards."""
 
-    def __init__(self, config: Config, platform: Platform) -> None:
+    def __init__(self, config: Config, platform: Platform, data_dir: Path) -> None:
         super().__init__()
         self.config = config
         self.platform = platform
+        self.data_dir = data_dir
         self.train_dataset: MemmapDataset | None = None
         self.val_dataset: MemmapDataset | None = None
         self.test_dataset: MemmapDataset | None = None
@@ -27,20 +29,20 @@ class KigoDataModule(LightningDataModule):
         if stage == "fit" or stage is None:
             self._require_splits(("train", "val"))
             self.train_dataset = MemmapDataset(
-                self.config.data_dir / "train", self.config.block_size
+                self.data_dir / "train", self.config.block_size
             )
             self.val_dataset = MemmapDataset(
-                self.config.data_dir / "val", self.config.block_size
+                self.data_dir / "val", self.config.block_size
             )
         elif stage == "validate":
             self._require_splits(("val",))
             self.val_dataset = MemmapDataset(
-                self.config.data_dir / "val", self.config.block_size
+                self.data_dir / "val", self.config.block_size
             )
         elif stage == "test":
             self._require_splits(("test",))
             self.test_dataset = MemmapDataset(
-                self.config.data_dir / "test", self.config.block_size
+                self.data_dir / "test", self.config.block_size
             )
         elif stage == "predict":
             raise NotImplementedError(
@@ -51,12 +53,12 @@ class KigoDataModule(LightningDataModule):
 
     def _require_splits(self, names: tuple[str, ...]) -> None:
         missing = [
-            name for name in names if not (self.config.data_dir / name).exists()
+            name for name in names if not (self.data_dir / name).exists()
         ]
         if missing:
             flags = " ".join(f"--{name}-tokens N" for name in missing)
             raise FileNotFoundError(
-                f"Missing data splits: {', '.join(missing)} under {self.config.data_dir}.\n"
+                f"Missing data splits: {', '.join(missing)} under {self.data_dir}.\n"
                 "Run the dataset preparation script with the required splits:\n"
                 f"  python scripts/prepare_dataset.py --dataset DATASET {flags}"
             )

@@ -4,10 +4,6 @@
 # This config is shared between training and inference so the architecture
 # always matches the checkpoint.
 
-# --- Paths ---
-data_dir: data/fineweb-edu
-checkpoint_dir: checkpoints
-
 # --- Tokenizer ---
 tokenizer_name: cl100k_base
 

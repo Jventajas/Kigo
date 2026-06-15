@@ -67,7 +67,7 @@ data/
         └── ...
 ```
 
-The training script loads `train/` and `val/` splits from `cfg.data_dir`. Both splits are required.
+The training script loads `train/` and `val/` splits from the path passed via `--data-dir` (default: `data/`). Both splits are required.
 
 ## Training
 
@@ -76,7 +76,7 @@ Kigo uses **PyTorch Lightning** for training. The config file controls the model
 ### Local development
 
 ```bash
-uv run python train.py --config config/dev.yaml
+uv run python train.py --config config/dev.yaml --data-dir data
 ```
 
 Use a tiny configuration (small model, small batch, few tokens) to iterate quickly on architecture and training logic.
@@ -111,11 +111,12 @@ Kigo is trained on Lightning AI's free tier, which imposes a 4-hour limit per st
 - **Resume on restart** — when you restart the studio and re-run the script, it picks up from `last.ckpt` without manual intervention.
 - **W&B continuity** — logging resumes under the same run ID across sessions.
 
-To run remotely, set the checkpoint and data directories in your config (or edit `config/kigo-162m.yaml`):
+To run remotely, point `--data-dir` and `--checkpoint-dir` at the studio paths:
 
-```yaml
-data_dir: /teamspace/studios/this_studio/data
-checkpoint_dir: /teamspace/studios/this_studio/checkpoints
+```bash
+uv run python train.py --config config/kigo-162m.yaml \
+    --data-dir /teamspace/studios/this_studio/data \
+    --checkpoint-dir /teamspace/studios/this_studio/checkpoints
 ```
 
 ## Project Structure

@@ -23,6 +23,18 @@ from nn.lightning_module import KigoLightningModule
 def main() -> None:
     parser = argparse.ArgumentParser(description="Train Kigo with PyTorch Lightning.")
     parser.add_argument("--config", type=str, required=True, help="Path to YAML config.")
+    parser.add_argument(
+        "--data-dir",
+        type=str,
+        default="data",
+        help="Path to the data directory containing train/, val/, and test/ splits.",
+    )
+    parser.add_argument(
+        "--checkpoint-dir",
+        type=str,
+        default="checkpoints",
+        help="Path to the directory where checkpoints are saved and resumed from.",
+    )
     parser.add_argument("--no-wandb", action="store_true", help="Disable Weights & Biases logging.")
     parser.add_argument("--seed", type=int, default=1337, help="Random seed for reproducibility.")
     args = parser.parse_args()
@@ -32,10 +44,10 @@ def main() -> None:
     platform = get_platform(prefer=config.device)
 
     # Resume detection
-    last_ckpt = config.checkpoint_dir / "last.ckpt"
+    last_ckpt = Path(args.checkpoint_dir) / "last.ckpt"
 
     # Data
-    datamodule = KigoDataModule(config, platform)
+    datamodule = KigoDataModule(config, platform, data_dir=Path(args.data_dir))
 
     # Model
     model = KigoLightningModule(config, platform)
@@ -58,7 +70,7 @@ def main() -> None:
     accumulation_steps = config.global_batch_size // config.batch_size
 
     checkpoint_callback = ModelCheckpoint(
-        dirpath=config.checkpoint_dir,
+        dirpath=Path(args.checkpoint_dir),
         filename="checkpoint_step_{step:05d}",
         auto_insert_metric_name=False,
         every_n_train_steps=config.checkpoint_interval,
