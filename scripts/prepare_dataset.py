@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tokenize a HuggingFace dataset and write uint32 binary shards."""
+"""Tokenize a HuggingFace dataset and write uint16 binary shards."""
 
 import os
 import sys
@@ -83,7 +83,7 @@ class SplitFiller:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Tokenize a dataset into uint32 shards.")
+    parser = argparse.ArgumentParser(description="Tokenize a dataset into uint16 shards.")
     parser.add_argument("--dataset", type=str, required=True, help="HuggingFace dataset name.")
     parser.add_argument("--dataset-config", type=str, default="sample-10BT", help="Dataset config name (default: sample-10BT).")
     parser.add_argument("--dataset-split", type=str, default="train", help="Dataset split to stream (default: train).")
@@ -101,7 +101,7 @@ def make_split(dir: Path, target: int, shard_size: int) -> SplitState:
     """Create a fresh split state with an empty shard buffer."""
     return {
         "dir": dir,
-        "buf": np.empty(shard_size, dtype=np.uint32),
+        "buf": np.empty(shard_size, dtype=np.uint16),
         "buf_pos": 0,
         "count": 0,
         "shard_index": 0,
@@ -134,7 +134,7 @@ def flush_shard(split: SplitState) -> None:
 def flatten_batch(batch_tokens: list[list[int]], eot: int) -> np.ndarray:
     """Concatenate tokenized documents with an EOT token after each."""
     batch_len = sum(len(d) + 1 for d in batch_tokens)
-    batch_arr = np.empty(batch_len, dtype=np.uint32)
+    batch_arr = np.empty(batch_len, dtype=np.uint16)
     pos = 0
     for doc_tokens in batch_tokens:
         n = len(doc_tokens)
