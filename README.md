@@ -84,7 +84,9 @@ Use a tiny configuration (small model, small batch, few tokens) to iterate quick
 ### Full training run
 
 ```bash
-uv run python train.py --config config/kigo-162m.yaml
+uv run python train.py --config config/kigo-162m.yaml \
+    --data-dir ../data/fineweb-edu \                  
+    --checkpoint-dir ../checkpoint
 ```
 
 The trainer auto-discovers `checkpoints/last.ckpt` and resumes from the next step. W&B logging continues under the same run ID across restarts.
