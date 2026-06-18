@@ -19,11 +19,13 @@ class Config:
     """Single source of truth for model architecture and training hyperparameters."""
 
     # --- Tokenizer ---
-    # tiktoken encoding name, e.g. "cl100k_base" (GPT-4 family).
-    tokenizer_name: str = "cl100k_base"
+    # Backend selects the implementation: "tiktoken" or "huggingface".
+    # tokenizer_name is the encoding name (tiktoken) or model id (huggingface).
+    tokenizer_backend: Literal["tiktoken", "huggingface"] = "huggingface"
+    tokenizer_name: str = "HuggingFaceTB/SmolLM2-135M"
 
     # --- Model architecture ---
-    vocab_size: int = 100277
+    vocab_size: int = 49152
     n_layer: int = 12
     n_head: int = 12
     d_model: int = 768

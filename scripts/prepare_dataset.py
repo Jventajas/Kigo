@@ -11,7 +11,9 @@ from pathlib import Path
 from typing import TypedDict
 from dotenv import load_dotenv
 from datasets import load_dataset
-import tiktoken
+
+from config import Config
+from tokenizer import build_tokenizer
 
 load_dotenv()  # loads HF_TOKEN from .env for gated datasets
 
@@ -93,7 +95,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--test-tokens", type=int, default=None, help="Number of test tokens.")
     parser.add_argument("--shard-size", type=int, default=100_000_000, help="Tokens per shard.")
     parser.add_argument("--output-dir", type=Path, default=Path("data"), help="Directory to write splits (default: ./data).")
-    parser.add_argument("--tokenizer", type=str, default="cl100k_base", help="tiktoken encoding name (e.g. cl100k_base).")
+    parser.add_argument("--tokenizer-backend", type=str, default="huggingface", choices=["tiktoken", "huggingface"], help="Tokenizer backend.")
+    parser.add_argument("--tokenizer", type=str, default="HuggingFaceTB/SmolLM2-135M", help="Encoding name (tiktoken) or model id (huggingface).")
     return parser.parse_args()
 
 
@@ -170,13 +173,14 @@ def main() -> None:
     for split in splits.values():
         split["dir"].mkdir(parents=True, exist_ok=True)
 
-    enc = tiktoken.get_encoding(args.tokenizer)
-    eot = enc.encode_single_token("<|endoftext|>")
+    config = Config(tokenizer_backend=args.tokenizer_backend, tokenizer_name=args.tokenizer)
+    enc = build_tokenizer(config)
+    eot = enc.eos_id
 
     print(f"Streaming {args.dataset} ...")
     stream = load_dataset(args.dataset, args.dataset_config, streaming=True, split=args.dataset_split)
-    # Group the stream into batches of 1,000 docs to amortize Python loop overhead.
-    stream = stream.batch(1_000)
+    # Group the stream into batches of docs to amortize Python loop overhead.
+    stream = stream.batch(20)
 
     tokens_to_process = sum(s["target"] for s in splits.values())
     filler = SplitFiller(
@@ -190,8 +194,7 @@ def main() -> None:
             if filler.all_full():
                 break
 
-            encoded = [enc.encode_ordinary(t) for t in batch[args.text_key]]
-            batch_tokens = encoded
+            batch_tokens = enc.encode_batch(batch[args.text_key])
             batch_arr = flatten_batch(batch_tokens, eot)
 
             pos = 0

@@ -1,10 +1,11 @@
 # Tiny config for local iteration on CPU / small GPU.
 
 # --- Tokenizer ---
-tokenizer_name: cl100k_base
+tokenizer_backend: huggingface
+tokenizer_name: HuggingFaceTB/SmolLM2-135M
 
 # --- Model architecture ---
-vocab_size: 100277
+vocab_size: 49152
 n_layer: 2
 n_head: 2
 d_model: 128

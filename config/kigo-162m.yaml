@@ -1,14 +1,13 @@
 # Full model and training config for the ~162M Kigo model on FineWeb-Edu.
-# (cl100k_base vocab raises the embedding/head matrix to ~77M params, so the
-# total sits around 162M.)
 # This config is shared between training and inference so the architecture
 # always matches the checkpoint.
 
 # --- Tokenizer ---
-tokenizer_name: cl100k_base
+tokenizer_backend: huggingface
+tokenizer_name: HuggingFaceTB/SmolLM2-135M
 
 # --- Model architecture ---
-vocab_size: 100277
+vocab_size: 49152
 n_layer: 12
 n_head: 12
 d_model: 768

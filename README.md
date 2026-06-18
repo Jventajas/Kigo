@@ -43,8 +43,8 @@ One command per corpus. `--train-tokens` is required; `--val-tokens` and `--test
 uv run scripts/prepare_dataset.py \
     --dataset HuggingFaceFW/fineweb-edu \
     --train-tokens 2_000_000_000 \
-    --val-tokens 20_000_000 \
-    --test-tokens 20_000_000
+    --val-tokens 1_000_000 \
+    --test-tokens 1_000_000
 ```
 
 This creates:
