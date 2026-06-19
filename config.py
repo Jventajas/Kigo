@@ -6,7 +6,7 @@ Usage:
 """
 
 import yaml
-from dataclasses import dataclass, field, fields
+from dataclasses import dataclass, fields
 from pathlib import Path
 from typing import Any, Literal
 
@@ -42,7 +42,8 @@ class Config:
     batch_size: int = 8
     global_batch_size: int = 512
     max_epochs: int = 4
-    learning_rate: float = 6e-4
+    adamw_lr: float = 6e-4  # AdamW group (embeddings, head, norms, biases)
+    muon_lr: float = 0.02   # Muon group (2D hidden weight matrices)
     min_lr: float = 6e-5
     warmup_steps: int = 2000
     weight_decay: float = 0.1

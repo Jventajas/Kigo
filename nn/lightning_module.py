@@ -1,17 +1,17 @@
 """PyTorch Lightning module for Kigo training and inference."""
 
 import math
-from typing import Any, Literal
+from typing import Any
 
 import torch
 from lightning.pytorch import LightningModule
+from lightning.pytorch.utilities.types import OptimizerLRScheduler
 
 from accelerator import Platform
 from config import Config
 from nn.model import GPT
+from optimizers import Muon, split_params
 from tokenizer import build_tokenizer
-
-Stage = Literal["fit", "validate", "test", "predict"]
 
 
 class KigoLightningModule(LightningModule):
@@ -32,7 +32,7 @@ class KigoLightningModule(LightningModule):
         self._val_loss_sum = 0.0
         self._val_batches = 0
 
-    def setup(self, stage: Stage | None = None) -> None:
+    def setup(self, stage: str) -> None:
         """Apply platform-specific PyTorch optimizations once."""
         self.platform.optimize()
 
@@ -74,27 +74,33 @@ class KigoLightningModule(LightningModule):
         self._val_loss_sum = 0.0
         self._val_batches = 0
 
-    def configure_optimizers(self) -> tuple[list[torch.optim.Optimizer], list[dict[str, Any]]]:
-        optimizer = torch.optim.AdamW(
-            self.parameters(),
-            lr=self.config.learning_rate,
+    def configure_optimizers(self) -> OptimizerLRScheduler:
+        muon_params, adamw_params = split_params(self.model)
+        optimizer = Muon(
+            muon_params,
+            adamw_params,
+            muon_lr=self.config.muon_lr,
+            adamw_lr=self.config.adamw_lr,
             betas=(self.config.beta1, self.config.beta2),
             eps=self.config.eps,
             weight_decay=self.config.weight_decay,
         )
 
-        min_lr_ratio = self.config.min_lr / self.config.learning_rate
+        min_lr_ratio = self.config.min_lr / self.config.adamw_lr
         total_steps = self.trainer.estimated_stepping_batches
         warmup_steps = self.config.warmup_steps
 
-        def lr_lambda(step: int) -> float:
+        def lr_lambda(step: int) -> float | int:
             if step < warmup_steps:
                 return step / warmup_steps
             progress = (step - warmup_steps) / (total_steps - warmup_steps)
             return min_lr_ratio + (1.0 - min_lr_ratio) * 0.5 * (1.0 + math.cos(math.pi * progress))
 
         scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
-        return [optimizer], [{"scheduler": scheduler, "interval": "step"}]
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": {"scheduler": scheduler, "interval": "step"},
+        }
 
     def on_save_checkpoint(self, checkpoint: dict[str, Any]) -> None:
         checkpoint["best_val_loss"] = self.best_val_loss

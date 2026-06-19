@@ -22,7 +22,8 @@ rope_max_length: 2048
 batch_size: 4
 global_batch_size: 512
 max_epochs: 4
-learning_rate: 0.0006
+adamw_lr: 0.0006
+muon_lr: 0.02
 min_lr: 0.00006
 warmup_steps: 200
 weight_decay: 0.1

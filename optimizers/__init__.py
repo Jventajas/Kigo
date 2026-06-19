@@ -1,3 +1,3 @@
-from optimizers.muon import Muon
+from optimizers.muon import Muon, split_params
 
-__all__ = ["Muon"]
+__all__ = ["Muon", "split_params"]
