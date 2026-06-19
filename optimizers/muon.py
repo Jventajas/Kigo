@@ -10,7 +10,7 @@ import torch
 from torch import Tensor
 
 
-def zeropower_via_newtonschulz(G: Tensor, steps: int = 5, epsilon: float = 1e-8) -> Tensor:
+def zeropower_via_newtonschulz(grad: Tensor, steps: int = 5, epsilon: float = 1e-8) -> Tensor:
     """Return an approximate orthogonalization of matrix G via Newton-Schulz.
 
     The Newton-Schulz iteration drives the singular values of G toward 1 while
@@ -18,21 +18,22 @@ def zeropower_via_newtonschulz(G: Tensor, steps: int = 5, epsilon: float = 1e-8)
     using only matmuls (no SVD) so it runs fast on GPU in bf16.
     """
     a, b, c = 3.4445, -4.7750, 2.0315
-    X = G / (G.norm() + epsilon)
+    normalized_grad = grad / (grad.norm() + epsilon)
 
-    height, width = X.shape
+    height, width = normalized_grad.shape
 
     if width < height:
-        X = X.T
+        normalized_grad = normalized_grad.T
 
     for _ in range(steps):
-        A = X @ X.T
-        X = a * X + (b * A + c * (A @ A)) @ X
+        normalized_grad_squared = normalized_grad @ normalized_grad.T
+        normalized_grad = a * normalized_grad + \
+            (b * normalized_grad_squared + c * (normalized_grad_squared @ normalized_grad_squared)) @ normalized_grad
 
     if width < height:
-        X = X.T
+        normalized_grad = normalized_grad.T
 
-    return X
+    return normalized_grad
 
 
 def split_params(model: torch.nn.Module) -> tuple[list[Tensor], list[Tensor]]:
