@@ -39,6 +39,9 @@ class RoPE(nn.Module):
     The actual rotation is applied via :func:`apply_rotary_emb`.
     """
 
+    cos_cached: torch.Tensor
+    sin_cached: torch.Tensor
+
     def __init__(self, d_head: int, max_length: int = 2048, base: float = 10000.0) -> None:
         super().__init__()
 

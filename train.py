@@ -7,7 +7,7 @@ from typing import cast
 
 import torch
 from lightning.pytorch import Trainer, seed_everything
-from lightning.pytorch.callbacks import ModelCheckpoint
+from lightning.pytorch.callbacks import Callback, ModelCheckpoint
 from lightning.pytorch.loggers import WandbLogger
 
 from accelerator import get_platform
@@ -82,7 +82,7 @@ def main() -> None:
         enable_version_counter=False,
     )
 
-    callbacks = [
+    callbacks: list[Callback] = [
         checkpoint_callback,
         ThroughputMemoryCallback(config, platform),
         SampleGenerationCallback(config),

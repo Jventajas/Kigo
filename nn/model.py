@@ -69,7 +69,7 @@ class GPT(nn.Module):
             logits: (B, T, vocab_size)
             loss: scalar cross-entropy loss if targets provided, else None.
         """
-        B, T = idx.size()
+        _, T = idx.size()
         assert T <= self.config.block_size, (
             f"Sequence length {T} exceeds block_size {self.config.block_size}"
         )

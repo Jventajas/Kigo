@@ -17,7 +17,7 @@ def init_weights(module: nn.Module, std: float = 0.02) -> None:
     """
     if isinstance(module, nn.Linear):
         nn.init.normal_(module.weight, mean=0.0, std=std)
-        if module.bias is not None:
+        if module.bias is not None:  # type: ignore[reportUnnecessaryComparison]  # torch stub types bias non-optional; it is None when bias=False
             nn.init.zeros_(module.bias)
     elif isinstance(module, nn.Embedding):
         nn.init.normal_(module.weight, mean=0.0, std=std)
