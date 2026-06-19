@@ -76,7 +76,7 @@ Kigo uses **PyTorch Lightning** for training. The config file controls the model
 ### Local development
 
 ```bash
-uv run python train.py --config config/dev.yaml --data-dir data
+uv run python train.py --config config/dev.yaml --data-dir data/fineweb-edu
 ```
 
 Use a tiny configuration (small model, small batch, few tokens) to iterate quickly on architecture and training logic.

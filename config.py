@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 
-_Precision = Literal["16-mixed", "bf16-mixed", "32-true"]
+Precision = Literal["16-mixed", "bf16-mixed", "32-true"]
 
 
 @dataclass
@@ -59,10 +59,9 @@ class Config:
     sample_interval: int = 2000
 
     # --- Device & precision ---
-    # None = auto-detect best platform / dtype / compile support
+    # None = auto-detect best platform / dtype (compile is platform-driven)
     device: str | None = None
-    dtype: _Precision | None = None
-    compile: bool | None = None
+    dtype: Precision | None = None
 
     # --- W&B ---
     wandb_project: str = "kigo"

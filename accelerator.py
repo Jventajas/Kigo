@@ -9,15 +9,12 @@ from typing import Literal
 
 import torch
 
-from config import _Precision
+from config import Precision
 
 try:
-    import torch_xla
-    import torch_xla.core.xla_model as xm
-
-    HAS_XLA = True
+    import torch_xla.core.xla_model as xm  # type: ignore[reportMissingImports]
 except ImportError:
-    HAS_XLA = False
+    xm = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,7 +56,7 @@ class Platform:
         return self.num_workers > 0
 
     @property
-    def default_precision(self) -> _Precision:
+    def default_precision(self) -> Precision:
         """Best Lightning precision for this platform."""
         if self.name == "cuda":
             major, _ = torch.cuda.get_device_capability(self.device)
@@ -67,6 +64,11 @@ class Platform:
         if self.name == "tpu":
             return "bf16-mixed"
         return "32-true"
+
+    @property
+    def should_compile(self) -> bool:
+        """Whether ``torch.compile`` is worth enabling by default here."""
+        return self.name in ("cuda", "tpu")
 
     def optimize(self) -> None:
         """Apply once-per-process PyTorch settings for this platform."""
@@ -91,7 +93,7 @@ class Platform:
             # MPS does its own memory/queue management; no global knobs help yet.
             pass
 
-        elif self.name == "tpu" and HAS_XLA:
+        elif self.name == "tpu" and xm is not None:
             # XLA handles its own thread pool; leave PyTorch threads alone.
             pass
 
@@ -113,7 +115,7 @@ class Platform:
             return torch.cuda.max_memory_allocated(self.device)
         if self.name == "mps":
             return torch.mps.driver_allocated_memory()
-        if self.name == "tpu" and HAS_XLA:
+        if self.name == "tpu" and xm is not None:
             try:
                 info = xm.get_memory_info(self.device)
                 return info.get("bytes_used", 0)
@@ -152,7 +154,7 @@ def get_platform(prefer: str | None = None) -> Platform:
         if name == "cuda" and torch.cuda.is_available():
             return Platform(device=torch.device("cuda", 0), name="cuda")
 
-        if name == "tpu" and HAS_XLA:
+        if name == "tpu" and xm is not None:
             try:
                 tpu_dev = xm.xla_device()
                 if xm.xla_device_hw(tpu_dev) == "TPU":

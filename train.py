@@ -51,7 +51,7 @@ def main() -> None:
 
     # Model
     model = KigoLightningModule(config, platform)
-    if config.compile:
+    if platform.should_compile:
         if platform.name == "tpu":
             model = cast(KigoLightningModule, torch.compile(model, backend="openxla"))
         else:
