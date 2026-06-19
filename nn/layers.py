@@ -31,6 +31,10 @@ class CausalSelfAttention(nn.Module):
         self.attn_dropout_p = dropout
         self.output_dropout = nn.Dropout(dropout)
 
+        # QK-norm: per-head RMSNorm on queries and keys for attention stability.
+        self.q_norm = RMSNorm(self.d_head)
+        self.k_norm = RMSNorm(self.d_head)
+
         self.rope = RoPE(
             d_head=self.d_head,
             max_length=rope_max_length,
@@ -47,6 +51,10 @@ class CausalSelfAttention(nn.Module):
         q = q.view(B, T, self.n_head, self.d_head).transpose(1, 2)
         k = k.view(B, T, self.n_head, self.d_head).transpose(1, 2)
         v = v.view(B, T, self.n_head, self.d_head).transpose(1, 2)
+
+        # QK-norm before RoPE (per-head RMSNorm over d_head)
+        q = self.q_norm(q)
+        k = self.k_norm(k)
 
         # Apply RoPE to Q and K
         cos, sin = self.rope(T)
