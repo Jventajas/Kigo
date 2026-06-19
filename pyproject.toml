@@ -18,6 +18,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "lightning-sdk>=2026.6.8.post0",
+    "pyright>=1.1.410",
 ]
 
 [build-system]
@@ -27,3 +28,23 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["nn", "optimizers"]
 include = ["*.py"]
+
+[tool.pyright]
+include = ["nn", "optimizers", "config.py", "train.py"]
+venvPath = "."
+venv = ".venv"
+pythonVersion = "3.14"
+typeCheckingMode = "strict"
+# Lenient at the library boundary: torch/lightning/transformers ship patchy stubs,
+# so silence "unknown type" noise from their return values and untyped bases/
+# decorators while keeping the strict checks on our own annotations.
+reportMissingTypeStubs = false
+reportMissingModuleSource = false
+reportUnknownMemberType = false
+reportUnknownArgumentType = false
+reportUnknownVariableType = false
+reportUnknownParameterType = false
+reportUnknownLambdaType = false
+reportUntypedBaseClass = false
+reportUntypedFunctionDecorator = false
+reportConstantRedefinition = false
