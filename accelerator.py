@@ -152,6 +152,8 @@ def get_platform(prefer: str | None = None) -> Platform:
 
     for name in order:
         if name == "cuda" and torch.cuda.is_available():
+            # Reduce allocator fragmentation to fit larger batches (read lazily on first alloc).
+            os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
             return Platform(device=torch.device("cuda", 0), name="cuda")
 
         if name == "tpu" and xm is not None:
