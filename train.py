@@ -38,11 +38,29 @@ def main() -> None:
     )
     parser.add_argument("--no-wandb", action="store_true", help="Disable Weights & Biases logging.")
     parser.add_argument("--seed", type=int, default=1337, help="Random seed for reproducibility.")
+    parser.add_argument(
+        "--hf-repo",
+        type=str,
+        default=None,
+        help="HF model repo (e.g. user/kigo) to sync checkpoints with; omit for local-only.",
+    )
     args = parser.parse_args()
 
     config = load_config(args.config)
     seed_everything(args.seed, workers=True)
     platform = get_platform(prefer=config.device)
+
+    # Pull the latest checkpoints from the Hub so a run can resume on any machine.
+    if args.hf_repo:
+        from huggingface_hub import snapshot_download
+        from huggingface_hub.errors import RepositoryNotFoundError
+
+        try:
+            snapshot_download(
+                repo_id=args.hf_repo, repo_type="model", local_dir=args.checkpoint_dir
+            )
+        except RepositoryNotFoundError:
+            print(f"No Hub repo {args.hf_repo} yet; using local checkpoints if present.")
 
     # Resume detection
     last_ckpt = Path(args.checkpoint_dir) / "last.ckpt"
@@ -92,7 +110,7 @@ def main() -> None:
         auto_insert_metric_name=False,
         every_n_train_steps=config.checkpoint_interval,
         save_last=True,
-        save_top_k=1,
+        save_top_k=3,
         monitor="val/loss",
         mode="min",
         save_weights_only=False,
@@ -121,6 +139,23 @@ def main() -> None:
         callbacks=callbacks,
     )
 
+    # Background push to the Hub: polls every 30s, commits only on change, squashes history to stay bounded.
+    scheduler = None
+    if args.hf_repo:
+        from huggingface_hub import CommitScheduler
+
+        Path(args.checkpoint_dir).mkdir(parents=True, exist_ok=True)
+
+        # Instantiating starts its own background sync thread.
+        scheduler = CommitScheduler(
+            repo_id=args.hf_repo,
+            repo_type="model",
+            folder_path=Path(args.checkpoint_dir),
+            every=0.5,
+            private=True,
+            squash_history=True,
+        )
+
     print(f"Platform : {platform}")
     print(f"Model    : {config.n_layer} layers, {config.d_model} dim, {config.n_head} heads")
     print(f"Accumulation : {accumulation_steps} micro-steps")
@@ -131,6 +166,9 @@ def main() -> None:
         datamodule=datamodule,
         ckpt_path=last_ckpt if last_ckpt.exists() else None,
     )
+
+    if scheduler is not None:
+        scheduler.trigger().result()  # ensure the final checkpoint reaches the Hub
 
 
 if __name__ == "__main__":
