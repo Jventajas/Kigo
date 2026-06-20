@@ -123,6 +123,58 @@ class Platform:
                 return 0
         return 0
 
+    def total_memory(self) -> int:
+        """Total device memory in **bytes** (0 where unknown)."""
+        if self.name == "cuda":
+            return torch.cuda.get_device_properties(self.device).total_memory
+        if self.name == "tpu" and xm is not None:
+            try:
+                info = xm.get_memory_info(self.device)
+                return int(info.get("bytes_limit", 0))
+            except Exception:
+                return 0
+        return 0
+
+    def synchronize(self) -> None:
+        """Block until all queued device work has finished."""
+        if self.name == "cuda":
+            torch.cuda.synchronize(self.device)
+        elif self.name == "mps":
+            torch.mps.synchronize()
+        elif self.name == "tpu" and xm is not None:
+            xm.wait_device_ops()
+
+    def mark_step(self) -> None:
+        """Materialize XLA's lazy graph so queued ops run; no-op off TPU."""
+        if self.name == "tpu" and xm is not None:
+            xm.mark_step()
+
+    def empty_cache(self) -> None:
+        """Release cached device memory between allocations."""
+        if self.name == "cuda":
+            torch.cuda.empty_cache()
+        elif self.name == "mps":
+            torch.mps.empty_cache()
+        elif self.name == "tpu":
+            # XLA has no cache-release API; mark_step flushes the graph so
+            # already-dropped tensors are actually freed before the next alloc.
+            self.mark_step()
+
+    @property
+    def device_name(self) -> str:
+        """Human-readable accelerator name for logging."""
+        if self.name == "cuda":
+            return torch.cuda.get_device_properties(self.device).name
+        if self.name == "tpu":
+            return "TPU core"
+        return self.name
+
+    @staticmethod
+    def is_oom_error(exc: RuntimeError) -> bool:
+        """Whether a ``RuntimeError`` is an out-of-memory signal (CUDA or XLA)."""
+        message = str(exc).lower()
+        return "out of memory" in message or "resource_exhausted" in message
+
     def __str__(self) -> str:
         return (
             f"Platform({self.name}, device={self.device!s}, "

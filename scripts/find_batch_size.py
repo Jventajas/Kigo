@@ -6,9 +6,10 @@ a realistic training step -- forward, backward, and ``optimizer.step()`` so Muon
 and AdamW state is allocated -- under the configured precision. Doubles the batch
 until OOM, then binary-searches the boundary, and prints a config suggestion.
 
-Only the CUDA path has a hard, catchable memory ceiling, so the probe is limited
-to CUDA. MPS allocates from unified system RAM and thrashes swap instead of
-raising OOM; CPU/TPU likewise have no comparable OOM to bisect.
+Supported on CUDA and TPU, which both raise a catchable OOM (ResourceExhausted
+on TPU). TPU has no peak-memory API, so its reported number is the current
+allocation -- softer than CUDA's peak, so keep extra headroom. MPS/CPU are
+rejected (MPS thrashes host RAM instead of raising OOM).
 
 Usage:
     python scripts/find_batch_size.py --config config/kigo-162m.yaml
@@ -21,7 +22,7 @@ import time
 
 import torch
 
-from accelerator import get_platform
+from accelerator import Platform, get_platform
 from config import Config, Precision, load_config
 from nn.model import GPT
 from optimizers import Muon, split_params
@@ -60,17 +61,18 @@ def build(config: Config, device: torch.device) -> tuple[GPT, Muon]:
     return model, optimizer
 
 
-def trial(config: Config, device: torch.device, batch_size: int, amp_dtype: torch.dtype | None) -> tuple[int, float] | None:
+def trial(config: Config, platform: Platform, batch_size: int, amp_dtype: torch.dtype | None) -> tuple[int, float] | None:
     """Run warmup + timed steps at ``batch_size``.
 
     Returns ``(peak_bytes, tokens_per_sec)``, or ``None`` on OOM.
     """
+    device = platform.device
     autocast = (
         torch.autocast(device_type=device.type, dtype=amp_dtype)
         if amp_dtype is not None
         else contextlib.nullcontext()
     )
-    torch.cuda.reset_peak_memory_stats(device)
+    platform.reset_peak_memory()
     model, optimizer = build(config, device)
     model.train()
 
@@ -86,29 +88,30 @@ def trial(config: Config, device: torch.device, batch_size: int, amp_dtype: torc
         loss.backward()
         optimizer.step()
         optimizer.zero_grad(set_to_none=True)
+        platform.mark_step()  # XLA is lazy: force the queued graph to run (and OOM if it must).
 
     try:
         for _ in range(WARMUP_STEPS):
             step()
-        torch.cuda.synchronize(device)
+        platform.synchronize()
         start = time.perf_counter()
         for _ in range(TIMED_STEPS):
             step()
-        torch.cuda.synchronize(device)
+        platform.synchronize()
         tokens_per_sec = batch_size * config.block_size * TIMED_STEPS / (time.perf_counter() - start)
-        return torch.cuda.max_memory_allocated(device), tokens_per_sec
+        return platform.memory_allocated(), tokens_per_sec
     except RuntimeError as e:
-        if "out of memory" not in str(e).lower():
+        if not platform.is_oom_error(e):
             raise
         return None
     finally:
         del model, optimizer
         gc.collect()
-        torch.cuda.empty_cache()
+        platform.empty_cache()
 
 
 def search(
-    config: Config, device: torch.device, amp_dtype: torch.dtype | None, budget: int
+    config: Config, platform: Platform, amp_dtype: torch.dtype | None, budget: int
 ) -> tuple[int, list[tuple[int, int, float]]]:
     """Find the largest batch whose peak stays within ``budget`` bytes.
 
@@ -118,7 +121,7 @@ def search(
     measured: list[tuple[int, int, float]] = []
 
     def within_budget(batch_size: int) -> bool:
-        result = trial(config, device, batch_size, amp_dtype)
+        result = trial(config, platform, batch_size, amp_dtype)
         if result is None:
             print(f"  bs={batch_size:<4d} OOM")
             return False
@@ -162,30 +165,27 @@ def main() -> None:
 
     config = load_config(args.config)
     platform = get_platform(prefer=config.device)
-    if platform.name != "cuda":
+    if platform.name not in ("cuda", "tpu"):
         print(
-            f"Batch-size search is only supported on CUDA (got {platform.name!r})."
+            f"Batch-size search is only supported on CUDA and TPU (got {platform.name!r})."
         )
         return
 
-    device = platform.device
     platform.optimize()
     precision = config.dtype or platform.default_precision
     amp_dtype = _AMP_DTYPE[precision]
-
-    props = torch.cuda.get_device_properties(device)
     n_params = sum(p.numel() for p in GPT(config).parameters())
-    total = props.total_memory
+    total = platform.total_memory()
     budget = int(MEM_HEADROOM * total)
 
     print("=== Kigo batch-size finder ===")
-    print(f"Device : {props.name}  ({total / 1024**3:.1f} GiB total, "
+    print(f"Device : {platform.device_name}  ({total / 1024**3:.1f} GiB total, "
           f"{budget / 1024**3:.1f} GiB budget @ {MEM_HEADROOM:.0%})")
     print(f"Model  : {n_params / 1e6:.0f}M params, block_size={config.block_size}, precision={precision}")
     print(f"\nSearching for the largest batch within budget "
           f"({WARMUP_STEPS} warmup + {TIMED_STEPS} timed steps each):")
 
-    recommended, measured = search(config, device, amp_dtype, budget)
+    recommended, measured = search(config, platform, amp_dtype, budget)
     peak = next(p for b, p, _ in measured if b == recommended)
     tput = next(t for b, _, t in measured if b == recommended)
 
