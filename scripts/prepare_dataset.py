@@ -180,7 +180,7 @@ def main() -> None:
     print(f"Streaming {args.dataset} ...")
     stream = load_dataset(args.dataset, args.dataset_config, streaming=True, split=args.dataset_split)
     # Group the stream into batches of docs to amortize Python loop overhead.
-    stream = stream.batch(20)
+    stream = stream.batch(1_000)
 
     tokens_to_process = sum(s["target"] for s in splits.values())
     filler = SplitFiller(
