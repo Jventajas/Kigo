@@ -103,10 +103,27 @@ class KigoLightningModule(LightningModule):
         }
 
     def on_save_checkpoint(self, checkpoint: dict[str, Any]) -> None:
+        # Strip torch.compile's "_orig_mod." prefix so checkpoints stay portable
+        # across compiled/uncompiled platforms (e.g. resuming a GPU run on CPU).
+        checkpoint["state_dict"] = {
+            key.replace("_orig_mod.", ""): value
+            for key, value in checkpoint["state_dict"].items()
+        }
         checkpoint["best_val_loss"] = self.best_val_loss
         checkpoint["tokens_processed"] = self.tokens_processed
 
     def on_load_checkpoint(self, checkpoint: dict[str, Any]) -> None:
+        # Match the checkpoint's keys to this process: drop any "_orig_mod."
+        # prefix, then re-add it only if our model is currently compiled.
+        compiled = hasattr(self.model, "_orig_mod")
+        remapped: dict[str, Any] = {}
+        for key, value in checkpoint["state_dict"].items():
+            key = key.replace("_orig_mod.", "")
+            if compiled:
+                key = key.replace("model.", "model._orig_mod.", 1)
+            remapped[key] = value
+        checkpoint["state_dict"] = remapped
+
         self.best_val_loss = checkpoint.get("best_val_loss", float("inf"))
         self.tokens_processed = checkpoint.get("tokens_processed", 0)
 
