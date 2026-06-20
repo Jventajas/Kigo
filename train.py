@@ -18,6 +18,7 @@ from callbacks import (
 from config import load_config
 from data_module import KigoDataModule
 from nn.lightning_module import KigoLightningModule
+from nn.model import GPT
 
 
 def main() -> None:
@@ -52,10 +53,12 @@ def main() -> None:
     # Model
     model = KigoLightningModule(config, platform)
     if platform.should_compile:
+        # Compile the inner GPT, not the LightningModule: compiling the whole
+        # module makes Dynamo trace Lightning's self.log() and crash.
         if platform.name == "tpu":
-            model = cast(KigoLightningModule, torch.compile(model, backend="openxla"))
+            model.model = cast(GPT, torch.compile(model.model, backend="openxla"))
         else:
-            model = cast(KigoLightningModule, torch.compile(model))
+            model.model = cast(GPT, torch.compile(model.model))
 
     # Logger
     logger: WandbLogger | None = None
