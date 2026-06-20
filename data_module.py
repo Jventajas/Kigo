@@ -1,16 +1,14 @@
 """PyTorch Lightning data module for Kigo."""
 
 from pathlib import Path
-from typing import Literal
 
 from lightning.pytorch import LightningDataModule
+from torch import Tensor
 from torch.utils.data import DataLoader
 
 from accelerator import Platform
 from config import Config
 from data import MemmapDataset
-
-Stage = Literal["fit", "validate", "test", "predict"]
 
 
 class KigoDataModule(LightningDataModule):
@@ -25,8 +23,8 @@ class KigoDataModule(LightningDataModule):
         self.val_dataset: MemmapDataset | None = None
         self.test_dataset: MemmapDataset | None = None
 
-    def setup(self, stage: Stage | None = None) -> None:
-        if stage == "fit" or stage is None:
+    def setup(self, stage: str) -> None:
+        if stage == "fit":
             self._require_splits(("train", "val"))
             self.train_dataset = MemmapDataset(
                 self.data_dir / "train", self.config.block_size
@@ -63,7 +61,7 @@ class KigoDataModule(LightningDataModule):
                 f"  python scripts/prepare_dataset.py --dataset DATASET {flags}"
             )
 
-    def _dataloader(self, dataset: MemmapDataset, shuffle: bool, drop_last: bool) -> DataLoader:
+    def _dataloader(self, dataset: MemmapDataset, shuffle: bool, drop_last: bool) -> DataLoader[Tensor]:
         return DataLoader(
             dataset,
             batch_size=self.config.batch_size,
@@ -75,22 +73,22 @@ class KigoDataModule(LightningDataModule):
             drop_last=drop_last,
         )
 
-    def train_dataloader(self) -> DataLoader:
+    def train_dataloader(self) -> DataLoader[Tensor]:
         if self.train_dataset is None:
             raise RuntimeError("train_dataset is not set; call setup('fit') first.")
         return self._dataloader(self.train_dataset, shuffle=True, drop_last=True)
 
-    def val_dataloader(self) -> DataLoader:
+    def val_dataloader(self) -> DataLoader[Tensor]:
         if self.val_dataset is None:
             raise RuntimeError("val_dataset is not set; call setup('fit') or setup('validate') first.")
         return self._dataloader(self.val_dataset, shuffle=False, drop_last=False)
 
-    def test_dataloader(self) -> DataLoader:
+    def test_dataloader(self) -> DataLoader[Tensor]:
         if self.test_dataset is None:
             raise RuntimeError("test_dataset is not set; call setup('test') first.")
         return self._dataloader(self.test_dataset, shuffle=False, drop_last=False)
 
-    def predict_dataloader(self) -> DataLoader:
+    def predict_dataloader(self) -> DataLoader[Tensor]:
         raise NotImplementedError(
             "predict_dataloader is not implemented; "
             "add a prompt dataset and predict_step first."

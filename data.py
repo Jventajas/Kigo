@@ -79,7 +79,7 @@ class TokenBuffer:
         return cached
 
 
-class MemmapDataset(Dataset):
+class MemmapDataset(Dataset[torch.Tensor]):
     """PyTorch Dataset yielding fixed-length token sequences from a TokenBuffer.
 
     Sequences are non-overlapping so DataLoader(shuffle=True) gives a random
@@ -123,7 +123,7 @@ def get_dataloader(
     drop_last: bool = True,
     prefetch_factor: int | None = None,
     persistent_workers: bool = False,
-) -> DataLoader:
+) -> DataLoader[torch.Tensor]:
     """Create a DataLoader for a single split directory containing .bin shards.
 
     Args:
@@ -145,16 +145,13 @@ def get_dataloader(
     """
     dataset = MemmapDataset(split_dir, sequence_length)
 
-    kwargs: dict = dict(
-        dataset=dataset,
+    return DataLoader(
+        dataset,
         batch_size=batch_size,
         shuffle=shuffle,
         num_workers=num_workers,
         pin_memory=pin_memory,
         drop_last=drop_last,
         persistent_workers=persistent_workers,
+        prefetch_factor=prefetch_factor,
     )
-    if prefetch_factor is not None:
-        kwargs["prefetch_factor"] = prefetch_factor
-
-    return DataLoader(**kwargs)

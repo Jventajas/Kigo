@@ -30,7 +30,7 @@ packages = ["nn", "optimizers"]
 include = ["*.py"]
 
 [tool.pyright]
-include = ["nn", "optimizers", "config.py", "train.py", "accelerator.py"]
+exclude = ["**/__pycache__", ".venv", "wandb", "data", "checkpoints"]
 venvPath = "."
 venv = ".venv"
 pythonVersion = "3.14"

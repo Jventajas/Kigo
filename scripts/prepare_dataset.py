@@ -8,7 +8,7 @@ import numpy as np
 
 from tqdm import tqdm
 from pathlib import Path
-from typing import TypedDict
+from typing import TypedDict, Any
 from dotenv import load_dotenv
 from datasets import load_dataset
 
@@ -30,7 +30,7 @@ class SplitState(TypedDict):
 class SplitFiller:
     """Routes token streams into train/val/test splits, flushing shards as they fill."""
 
-    def __init__(self, splits: dict[str, SplitState], shard_size: int, pbar: tqdm) -> None:
+    def __init__(self, splits: dict[str, SplitState], shard_size: int, pbar: tqdm[Any]) -> None:
         self.splits = splits
         self.shard_size = shard_size
         self.pbar = pbar

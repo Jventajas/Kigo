@@ -1,18 +1,20 @@
 """PyTorch Lightning callbacks for Kigo training."""
 
 import time
-from pathlib import Path
-from typing import Any
+from typing import Any, TYPE_CHECKING, cast
 
 import torch
 import wandb
-from lightning.pytorch import Callback, Trainer
+from lightning.pytorch import Callback, LightningModule, Trainer
 from lightning.pytorch.loggers import WandbLogger
 from lightning.pytorch.utilities import rank_zero_only
-from lightning.pytorch.utilities.rank_zero import rank_zero_info
+from lightning_utilities.core.rank_zero import rank_zero_info
 
 from accelerator import Platform
 from config import Config
+
+if TYPE_CHECKING:
+    from nn.lightning_module import KigoLightningModule
 
 DEFAULT_PROMPTS = [
     "The capital of France is",
@@ -40,16 +42,17 @@ class ThroughputMemoryCallback(Callback):
         self._log_time = time.time()
         self._log_start_step = 0
 
-    def on_train_start(self, trainer: Trainer, pl_module: Any) -> None:
+    def on_train_start(self, trainer: Trainer, pl_module: LightningModule) -> None:
         self._log_time = time.time()
         self._log_start_step = 0
-        pl_module.tokens_processed = 0
+        cast("KigoLightningModule", pl_module).tokens_processed = 0
 
     def on_train_batch_end(
-        self, trainer: Trainer, pl_module: Any, outputs: Any, batch: Any, batch_idx: int
+        self, trainer: Trainer, pl_module: LightningModule, outputs: Any, batch: Any, batch_idx: int
     ) -> None:
+        module = cast("KigoLightningModule", pl_module)
         step = trainer.global_step
-        pl_module.tokens_processed = step * self.tokens_per_step
+        module.tokens_processed = step * self.tokens_per_step
 
         if step == 0 or step % self.log_interval != 0:
             return
@@ -69,9 +72,9 @@ class ThroughputMemoryCallback(Callback):
         memory_gb = self.platform.memory_allocated() / 1e9
         self.platform.reset_peak_memory()
 
-        pl_module.log("train/tokens_per_sec", tokens_sec, on_step=True, on_epoch=False)
-        pl_module.log("train/lr", lr, on_step=True, on_epoch=False)
-        pl_module.log("train/memory_gb", memory_gb, on_step=True, on_epoch=False)
+        module.log("train/tokens_per_sec", tokens_sec, on_step=True, on_epoch=False)
+        module.log("train/lr", lr, on_step=True, on_epoch=False)
+        module.log("train/memory_gb", memory_gb, on_step=True, on_epoch=False)
 
         self._log_time = now
         self._log_start_step = step
@@ -87,13 +90,13 @@ class SampleGenerationCallback(Callback):
 
     @rank_zero_only
     def on_train_batch_end(
-        self, trainer: Trainer, pl_module: Any, outputs: Any, batch: Any, batch_idx: int
+        self, trainer: Trainer, pl_module: LightningModule, outputs: Any, batch: Any, batch_idx: int
     ) -> None:
         step = trainer.global_step
         if step == 0 or step % self.sample_interval != 0:
             return
 
-        samples = pl_module.generate_samples(
+        samples = cast("KigoLightningModule", pl_module).generate_samples(
             prompts=DEFAULT_PROMPTS,
             max_new_tokens=self.config.max_new_tokens,
             temperature=self.config.temperature,
