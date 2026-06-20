@@ -63,9 +63,23 @@ def main() -> None:
     # Logger
     logger: WandbLogger | None = None
     if not args.no_wandb:
+        import secrets
+
+        # Persist the W&B run id next to the checkpoints so a resumed run
+        # continues the same run; a clean start (no checkpoint) gets a new one.
+        run_id_file = Path(args.checkpoint_dir) / "wandb_run_id"
+        if last_ckpt.exists() and run_id_file.exists():
+            run_id = run_id_file.read_text().strip()
+        else:
+            run_id = secrets.token_hex(4)
+            run_id_file.parent.mkdir(parents=True, exist_ok=True)
+            run_id_file.write_text(run_id)
+
         logger = WandbLogger(
             project=config.wandb_project,
             name=config.wandb_run_name,
+            id=run_id,
+            resume="allow",
             config={k: str(v) if isinstance(v, Path) else v for k, v in vars(config).items()},
         )
 
