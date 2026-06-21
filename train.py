@@ -178,7 +178,7 @@ def main() -> None:
             repo_id=args.hf_repo,
             repo_type="model",
             folder_path=Path(args.checkpoint_dir),
-            every=0.5,
+            every=5,
             private=True,
             squash_history=True,
         )

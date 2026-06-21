@@ -45,7 +45,7 @@ class Config:
     adamw_lr: float = 6e-4  # AdamW group (embeddings, head, norms, biases)
     muon_lr: float = 0.02   # Muon group (2D hidden weight matrices)
     min_lr: float = 6e-5
-    warmup_steps: int = 2000
+    warmup_steps: int = 500
     weight_decay: float = 0.1
     beta1: float = 0.9
     beta2: float = 0.95
@@ -53,10 +53,10 @@ class Config:
     grad_clip: float = 1.0
 
     # --- Intervals ---
-    checkpoint_interval: int = 500
+    checkpoint_interval: int = 100
     eval_interval: float = 0.1
     log_interval: int = 10
-    sample_interval: int = 2000
+    sample_interval: int = 100
 
     # --- Device & precision ---
     # None = auto-detect best platform / dtype (compile is platform-driven)
