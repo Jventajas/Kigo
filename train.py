@@ -139,9 +139,7 @@ def main() -> None:
         auto_insert_metric_name=False,
         every_n_train_steps=config.checkpoint_interval,
         save_last=True,
-        save_top_k=3,
-        monitor="val/loss",
-        mode="min",
+        save_top_k=1,
         save_weights_only=False,
         enable_version_counter=False,
     )
