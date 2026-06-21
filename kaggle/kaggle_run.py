@@ -32,23 +32,32 @@ except Exception:
     pass
 
 subprocess.run(["git", "clone", "--depth", "1", f"https://{repo_url}", "repo"], check=True)
-subprocess.run(["pip", "install", "-e", "."], cwd="repo", check=True)
+# Kaggle ships a CUDA-matched torch; install our package with --no-deps so pip can't
+# replace it with a different build, then add the rest (no torch).
+subprocess.run(["pip", "install", "-e", ".", "--no-deps"], cwd="repo", check=True)
+subprocess.run(["pip", "install", "lightning", "wandb", "huggingface_hub"], check=True)
 
-# Auto-discover the attached dataset: the split dir, or a tar to unpack.
+# Auto-discover the attached dataset: find the train/ split at any depth (the
+# mount may nest it), or unpack a .tar/.tar.gz archive as a fallback.
 inputs = Path("/kaggle/input")
-data_dir = next((d for d in inputs.glob("*") if (d / "train").is_dir()), None)
-if data_dir is None:
-    tars = list(inputs.glob("*/*.tar"))
-    if not tars:
+train = next((p for p in inputs.rglob("train") if p.is_dir()), None)
+if train is not None:
+    data_dir = train.parent
+else:
+    archives = sorted(inputs.glob("*/*.tar*"))
+    if not archives:
         raise FileNotFoundError(f"No train/ split or .tar archive under {inputs}")
     data_dir = Path("/kaggle/working/data")
-    with tarfile.open(tars[0]) as tf:
+    with tarfile.open(archives[0]) as tf:
         tf.extractall(data_dir)
+    train = next(p for p in data_dir.rglob("train") if p.is_dir())
+    data_dir = train.parent
 
 subprocess.run(
     ["python", "train.py",
      "--config", "config/kigo-162m.yaml",
      "--data-dir", str(data_dir),
-     "--hf-repo", hf_repo],
+     "--hf-repo", hf_repo,
+     "--auto-batch"],
     cwd="repo", check=True,
 )

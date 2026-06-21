@@ -6,10 +6,8 @@ a realistic training step -- forward, backward, and ``optimizer.step()`` so Muon
 and AdamW state is allocated -- under the configured precision. Doubles the batch
 until OOM, then binary-searches the boundary, and prints a config suggestion.
 
-Supported on CUDA and TPU, which both raise a catchable OOM (ResourceExhausted
-on TPU). TPU has no peak-memory API, so its reported number is the current
-allocation -- softer than CUDA's peak, so keep extra headroom. MPS/CPU are
-rejected (MPS thrashes host RAM instead of raising OOM).
+CUDA only: it has a hard, catchable memory ceiling. MPS thrashes host RAM
+instead of raising OOM, and CPU has no comparable limit, so both are rejected.
 
 Usage:
     python scripts/find_batch_size.py --config config/kigo-162m.yaml
@@ -19,6 +17,7 @@ import argparse
 import contextlib
 import gc
 import time
+from pathlib import Path
 
 import torch
 
@@ -88,7 +87,6 @@ def trial(config: Config, platform: Platform, batch_size: int, amp_dtype: torch.
         loss.backward()
         optimizer.step()
         optimizer.zero_grad(set_to_none=True)
-        platform.mark_step()  # XLA is lazy: force the queued graph to run (and OOM if it must).
 
     try:
         for _ in range(WARMUP_STEPS):
@@ -161,14 +159,18 @@ def search(
 def main() -> None:
     parser = argparse.ArgumentParser(description="Find the largest micro-batch that fits.")
     parser.add_argument("--config", type=str, required=True, help="Path to YAML config.")
+    parser.add_argument(
+        "--emit",
+        type=str,
+        default=None,
+        help="Write the recommended micro-batch (just the integer) to this file.",
+    )
     args = parser.parse_args()
 
     config = load_config(args.config)
     platform = get_platform(prefer=config.device)
-    if platform.name not in ("cuda", "tpu"):
-        print(
-            f"Batch-size search is only supported on CUDA and TPU (got {platform.name!r})."
-        )
+    if platform.name != "cuda":
+        print(f"Batch-size search is only supported on CUDA (got {platform.name!r}).")
         return
 
     platform.optimize()
@@ -207,6 +209,9 @@ def main() -> None:
     print(f"  global_batch_size: {effective}    # was {config.global_batch_size}  (= {recommended} x {accumulation})")
     print(f"  -> accumulate_grad_batches = {accumulation} (computed by train.py), "
           f"tokens/step = {effective * config.block_size:,}")
+
+    if args.emit:
+        Path(args.emit).write_text(str(recommended))
 
 
 if __name__ == "__main__":

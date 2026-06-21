@@ -1,6 +1,6 @@
 """Platform detection and Lightning-agnostic performance tuning.
 
-Priority: CUDA → TPU → MPS → CPU
+Priority: CUDA → MPS → CPU
 """
 
 import os
@@ -11,18 +11,13 @@ import torch
 
 from config import Precision
 
-try:
-    import torch_xla.core.xla_model as xm  # type: ignore[reportMissingImports]
-except ImportError:
-    xm = None
-
 
 @dataclass(frozen=True, slots=True)
 class Platform:
     """Immutable descriptor for the compute platform we are running on."""
 
     device: torch.device
-    name: Literal["cuda", "tpu", "mps", "cpu"]
+    name: Literal["cuda", "mps", "cpu"]
 
     @property
     def pin_memory(self) -> bool:
@@ -42,7 +37,7 @@ class Platform:
         cores = os.cpu_count() or 1
         if self.name == "cpu":
             return min(4, cores // 2)
-        # CUDA / TPU: scale with available host cores, but cap to avoid thrash.
+        # CUDA: scale with available host cores, but cap to avoid thrash.
         return min(8, max(2, cores // 4))
 
     @property
@@ -61,14 +56,12 @@ class Platform:
         if self.name == "cuda":
             major, _ = torch.cuda.get_device_capability(self.device)
             return "bf16-mixed" if major >= 8 else "16-mixed"
-        if self.name == "tpu":
-            return "bf16-mixed"
         return "32-true"
 
     @property
     def should_compile(self) -> bool:
         """Whether ``torch.compile`` is worth enabling by default here."""
-        return self.name in ("cuda", "tpu")
+        return self.name == "cuda"
 
     def optimize(self) -> None:
         """Apply once-per-process PyTorch settings for this platform."""
@@ -93,10 +86,6 @@ class Platform:
             # MPS does its own memory/queue management; no global knobs help yet.
             pass
 
-        elif self.name == "tpu" and xm is not None:
-            # XLA handles its own thread pool; leave PyTorch threads alone.
-            pass
-
     def reset_peak_memory(self) -> None:
         """Reset peak memory stats so the next query is fresh.
 
@@ -108,32 +97,26 @@ class Platform:
     def memory_allocated(self) -> int:
         """Device memory in **bytes** since last reset (or process start).
 
-        For CUDA this is the peak allocation. For MPS and TPU no peak API
-        exists, so this returns the current driver allocation.
+        For CUDA this is the peak allocation. MPS has no peak API, so it
+        returns the current driver allocation.
         """
         if self.name == "cuda":
             return torch.cuda.max_memory_allocated(self.device)
         if self.name == "mps":
             return torch.mps.driver_allocated_memory()
-        if self.name == "tpu" and xm is not None:
-            try:
-                info = xm.get_memory_info(self.device)
-                return info.get("bytes_used", 0)
-            except Exception:
-                return 0
         return 0
 
     def total_memory(self) -> int:
         """Total device memory in **bytes** (0 where unknown)."""
         if self.name == "cuda":
             return torch.cuda.get_device_properties(self.device).total_memory
-        if self.name == "tpu" and xm is not None:
-            try:
-                info = xm.get_memory_info(self.device)
-                return int(info.get("bytes_limit", 0))
-            except Exception:
-                return 0
         return 0
+
+    def device_count(self) -> int:
+        """Number of devices this accelerator can train across (>= 1)."""
+        if self.name == "cuda":
+            return max(1, torch.cuda.device_count())
+        return 1
 
     def synchronize(self) -> None:
         """Block until all queued device work has finished."""
@@ -141,13 +124,6 @@ class Platform:
             torch.cuda.synchronize(self.device)
         elif self.name == "mps":
             torch.mps.synchronize()
-        elif self.name == "tpu" and xm is not None:
-            xm.wait_device_ops()
-
-    def mark_step(self) -> None:
-        """Materialize XLA's lazy graph so queued ops run; no-op off TPU."""
-        if self.name == "tpu" and xm is not None:
-            xm.mark_step()
 
     def empty_cache(self) -> None:
         """Release cached device memory between allocations."""
@@ -155,25 +131,18 @@ class Platform:
             torch.cuda.empty_cache()
         elif self.name == "mps":
             torch.mps.empty_cache()
-        elif self.name == "tpu":
-            # XLA has no cache-release API; mark_step flushes the graph so
-            # already-dropped tensors are actually freed before the next alloc.
-            self.mark_step()
 
     @property
     def device_name(self) -> str:
         """Human-readable accelerator name for logging."""
         if self.name == "cuda":
             return torch.cuda.get_device_properties(self.device).name
-        if self.name == "tpu":
-            return "TPU core"
         return self.name
 
     @staticmethod
     def is_oom_error(exc: RuntimeError) -> bool:
-        """Whether a ``RuntimeError`` is an out-of-memory signal (CUDA or XLA)."""
-        message = str(exc).lower()
-        return "out of memory" in message or "resource_exhausted" in message
+        """Whether a ``RuntimeError`` is an out-of-memory signal."""
+        return "out of memory" in str(exc).lower()
 
     def __str__(self) -> str:
         return (
@@ -186,18 +155,16 @@ def get_platform(prefer: str | None = None) -> Platform:
     """Detect and return the best available platform.
 
     Args:
-        prefer: If given (``'cuda'``, ``'tpu'``, ``'mps'``, ``'cpu'``), check
-            that platform first.  If unavailable, fall back to the default
-            priority order.
+        prefer: If given (``'cuda'``, ``'mps'``, ``'cpu'``), check that platform
+            first.  If unavailable, fall back to the default priority order.
 
     Priority:
         1. NVIDIA CUDA
-        2. Google TPU (via torch_xla)
-        3. Apple MPS
-        4. CPU
+        2. Apple MPS
+        3. CPU
     """
     prefer = (prefer or "").lower().strip()
-    order = ["cuda", "tpu", "mps", "cpu"]
+    order = ["cuda", "mps", "cpu"]
     if prefer in order:
         # Bump up the preferred platform in the priority list.
         order = [prefer] + [name for name in order if name != prefer]
@@ -207,14 +174,6 @@ def get_platform(prefer: str | None = None) -> Platform:
             # Reduce allocator fragmentation to fit larger batches (read lazily on first alloc).
             os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
             return Platform(device=torch.device("cuda", 0), name="cuda")
-
-        if name == "tpu" and xm is not None:
-            try:
-                tpu_dev = xm.xla_device()
-                if xm.xla_device_hw(tpu_dev) == "TPU":
-                    return Platform(device=tpu_dev, name="tpu")
-            except Exception:
-                pass
 
         if name == "mps" and torch.backends.mps.is_available():
             return Platform(device=torch.device("mps"), name="mps")

@@ -62,14 +62,16 @@ class KigoDataModule(LightningDataModule):
             )
 
     def _dataloader(self, dataset: MemmapDataset, shuffle: bool, drop_last: bool) -> DataLoader[Tensor]:
+        # Workers are per-process; split across devices so N ranks don't oversubscribe the host CPU.
+        workers = self.platform.num_workers // self.platform.device_count()
         return DataLoader(
             dataset,
             batch_size=self.config.batch_size,
             shuffle=shuffle,
-            num_workers=self.platform.num_workers,
+            num_workers=workers,
             pin_memory=self.platform.pin_memory,
-            prefetch_factor=self.platform.prefetch_factor,
-            persistent_workers=self.platform.persistent_workers,
+            prefetch_factor=2 if workers > 0 else None,
+            persistent_workers=workers > 0,
             drop_last=drop_last,
         )
 
