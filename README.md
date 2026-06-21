@@ -17,7 +17,7 @@ The architecture combines four modern components — RoPE, SwiGLU, RMSNorm, and 
 | Heads | 12 |
 | d_model | 768 |
 | Context length | 1024 |
-| Vocabulary | 100277 (cl100k_base) |
+| Vocabulary | 49152 (SmolLM2 tokenizer) |
 | Positional encoding | RoPE (Rotary Position Embedding) |
 | FFN activation | SwiGLU |
 | Normalization | RMSNorm + Pre-LN |
@@ -109,9 +109,9 @@ The default is a safe starting point; the best value is found empirically on you
 Kigo is trained on Lightning AI's free tier, which imposes a 4-hour limit per studio session. The training script handles this transparently:
 
 - **Automatic checkpointing** every `checkpoint_interval` steps via PyTorch Lightning `ModelCheckpoint`.
-- **SIGTERM handler** catches the platform's pre-kill signal and writes an emergency checkpoint before exiting cleanly.
 - **Resume on restart** — when you restart the studio and re-run the script, it picks up from `last.ckpt` without manual intervention.
 - **W&B continuity** — logging resumes under the same run ID across sessions.
+- **Hub sync** — pass `--hf-repo user/repo` to push `last.ckpt` and the W&B run id to a Hugging Face model repo every 30s and resume from it on any machine.
 
 To run remotely, point `--data-dir` and `--checkpoint-dir` at the studio paths:
 
@@ -121,28 +121,50 @@ uv run python train.py --config config/kigo-162m.yaml \
     --checkpoint-dir /teamspace/studios/this_studio/checkpoints
 ```
 
+### Run on Kaggle (free GPU/TPU)
+
+Kaggle offers ~30h/week GPU and ~20h/week TPU free. The `kaggle/` directory holds a script-kernel launcher so you drive headless runs from your terminal — no notebooks.
+
+1. **Host the tokenized shards** as a private Kaggle Dataset (once):
+   ```bash
+   kaggle datasets create -p data/fineweb-edu --dir-mode tar
+   ```
+2. **Set Kaggle Secrets** (Add-ons → Secrets): `HF_TOKEN`, `WANDB_API_KEY`, `REPO_URL` (e.g. `github.com/you/Kigo.git`), `HF_CKPT_REPO` (e.g. `you/kigo`); add `GITHUB_TOKEN` if the repo is private.
+3. **Configure the kernel** (the copy is gitignored):
+   ```bash
+   cp kaggle/kernel-metadata.json.example kaggle/kernel-metadata.json   # set your username + dataset slug
+   ```
+4. **Launch** headless GPU/TPU runs from your terminal:
+   ```bash
+   kaggle kernels push -p kaggle
+   ```
+
+`--hf-repo` keeps checkpoints on the Hub, so each session resumes the previous one — chaining Kaggle's per-session limits into a continuous run. For the TPU lane, flip `enable_gpu`/`enable_tpu` in the kernel metadata.
+
 ## Project Structure
 
 ```
-├── train.py              # Training orchestrator (PyTorch Lightning Trainer)
-├── nn/                   # Model architecture
-│   ├── model.py          # GPT assembly
+├── train.py                 # Training orchestrator (PyTorch Lightning Trainer)
+├── nn/                      # Model architecture
+│   ├── model.py             # GPT assembly
 │   ├── lightning_module.py  # PyTorch Lightning module
-│   ├── layers.py         # Attention + MLP blocks
-│   ├── embeddings.py     # Token + RoPE
-│   ├── activations.py    # SwiGLU
-│   ├── norm.py           # RMSNorm
-│   └── init.py           # Weight initialization
-├── data.py               # Memmap Dataset
-├── data_module.py        # PyTorch Lightning data module
-├── callbacks.py          # Throughput, sampling, emergency checkpoint callbacks
-├── eval.py               # Text generation utilities
-├── config.py             # Hyperparameters and model config
-├── accelerator.py        # Platform detection and DataLoader tuning
+│   ├── layers.py            # Attention + SwiGLU MLP blocks
+│   ├── embeddings.py        # Token + RoPE
+│   ├── norm.py              # RMSNorm
+│   └── init.py              # Weight initialization
+├── optimizers/
+│   └── muon.py              # Muon (2D hidden weights) + AdamW (rest)
+├── data.py                  # Memmap dataset
+├── data_module.py           # PyTorch Lightning data module
+├── callbacks.py             # Throughput/memory + sample-generation callbacks
+├── tokenizer.py             # Tokenizer construction (tiktoken / HuggingFace)
+├── config.py                # Hyperparameters and model config
+├── config/                  # YAML configs (dev, kigo-162m)
+├── accelerator.py           # Platform detection, device ops, DataLoader tuning
 ├── scripts/
-│   ├── tokenize_data.py  # Dataset preprocessing
-│   └── run_eval.py       # Standalone evaluation
-└── checkpoints/          # Runtime: model checkpoints (not committed)
+│   ├── prepare_dataset.py   # Tokenize a HF dataset into uint16 shards
+│   └── find_batch_size.py   # Probe the largest micro-batch that fits
+└── kaggle/                  # Headless Kaggle script-kernel launcher
 ```
 
 ## License

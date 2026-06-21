@@ -1,0 +1,14 @@
+{
+  "id": "YOUR_KAGGLE_USERNAME/kigo-train",
+  "title": "kigo-train",
+  "code_file": "kaggle_run.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": false,
+  "enable_tpu": true,
+  "enable_internet": true,
+  "dataset_sources": ["YOUR_KAGGLE_USERNAME/kigo-fineweb"],
+  "competition_sources": [],
+  "kernel_sources": []
+}

@@ -24,3 +24,6 @@ specs/
 checkpoints/
 data/
 wandb/
+
+# Kaggle (per-user, generated from the .example)
+kaggle/kernel-metadata.json
