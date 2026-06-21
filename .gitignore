@@ -27,3 +27,6 @@ wandb/
 
 # Kaggle (per-user, generated from the .example)
 kaggle/kernel-metadata.json
+
+# Lightning default CSV logs
+lightning_logs/
