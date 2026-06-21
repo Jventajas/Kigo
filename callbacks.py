@@ -8,7 +8,6 @@ import wandb
 from lightning.pytorch import Callback, LightningModule, Trainer
 from lightning.pytorch.loggers import WandbLogger
 from lightning.pytorch.utilities import rank_zero_only
-from lightning_utilities.core.rank_zero import rank_zero_info
 
 from accelerator import Platform
 from config import Config
@@ -103,13 +102,7 @@ class SampleGenerationCallback(Callback):
             top_k=self.config.top_k,
         )
 
-        rank_zero_info("  → Generating samples...")
-        for sample in samples[:3]:
-            rank_zero_info(f"    PROMPT: {sample['prompt']!r}")
-            rank_zero_info(f"    OUTPUT: {sample['output'][:200]!r}")
-            rank_zero_info("")
-
-        # Log the full set to W&B if a logger is attached.
+        # Log the samples to W&B if a logger is attached (not to the console).
         for logger in trainer.loggers:
             if isinstance(logger, WandbLogger):
                 table = wandb.Table(columns=["step", "prompt", "output"])

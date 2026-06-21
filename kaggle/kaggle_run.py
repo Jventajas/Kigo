@@ -35,7 +35,7 @@ subprocess.run(["git", "clone", "--depth", "1", f"https://{repo_url}", "repo"], 
 # Kaggle ships a CUDA-matched torch; install our package with --no-deps so pip can't
 # replace it with a different build, then add the rest (no torch).
 subprocess.run(["pip", "install", "-e", ".", "--no-deps"], cwd="repo", check=True)
-subprocess.run(["pip", "install", "lightning", "wandb", "huggingface_hub"], check=True)
+subprocess.run(["pip", "install", "lightning", "wandb", "huggingface_hub", "torchdata"], check=True)
 
 # Auto-discover the attached dataset: find the train/ split at any depth (the
 # mount may nest it), or unpack a .tar/.tar.gz archive as a fallback.
@@ -52,6 +52,11 @@ else:
         tf.extractall(data_dir)
     train = next(p for p in data_dir.rglob("train") if p.is_dir())
     data_dir = train.parent
+
+# Disable Xet so CommitScheduler's buffer uploads use the standard LFS path (Xet
+# rejects buffers). HF_HUB_VERBOSITY is a TEMP debug aid -- remove once uploads are confirmed.
+os.environ["HF_HUB_DISABLE_XET"] = "1"
+os.environ["HF_HUB_VERBOSITY"] = "debug"
 
 subprocess.run(
     ["python", "train.py",
