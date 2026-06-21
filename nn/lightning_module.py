@@ -67,8 +67,8 @@ class KigoLightningModule(LightningModule):
             return
         avg_loss = self._val_loss_sum / self._val_batches
         perplexity = torch.exp(torch.tensor(avg_loss))
-        self.log("val/loss", avg_loss, prog_bar=True)
-        self.log("val/perplexity", perplexity, prog_bar=True)
+        self.log("val/loss", avg_loss, prog_bar=True, sync_dist=True)
+        self.log("val/perplexity", perplexity, prog_bar=True, sync_dist=True)
         if avg_loss < self.best_val_loss:
             self.best_val_loss = avg_loss
         self._val_loss_sum = 0.0
