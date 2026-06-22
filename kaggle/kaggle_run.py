@@ -53,11 +53,6 @@ else:
     train = next(p for p in data_dir.rglob("train") if p.is_dir())
     data_dir = train.parent
 
-# Disable Xet so CommitScheduler's buffer uploads use the standard LFS path (Xet
-# rejects buffers). HF_HUB_VERBOSITY is a TEMP debug aid -- remove once uploads are confirmed.
-os.environ["HF_HUB_DISABLE_XET"] = "1"
-os.environ["HF_HUB_VERBOSITY"] = "debug"
-
 subprocess.run(
     ["python", "train.py",
      "--config", "config/kigo-162m.yaml",
