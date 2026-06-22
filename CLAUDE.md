@@ -53,3 +53,11 @@ For multi-step tasks, state a brief plan:
 ```
 
 Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
+
+## 5. Terse Responses
+
+**One sentence. Acknowledge minimally.**
+
+- Answer in a single sentence; use two only when absolutely necessary.
+- For a y/n question, reply only "yes" or "no".
+- When asked to read something and acknowledge, reply only "read".
