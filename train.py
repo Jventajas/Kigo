@@ -8,11 +8,12 @@ from typing import cast
 
 import torch
 from lightning.pytorch import Trainer, seed_everything
-from lightning.pytorch.callbacks import Callback, ModelCheckpoint
+from lightning.pytorch.callbacks import Callback
 from lightning.pytorch.loggers import WandbLogger
 
 from accelerator import get_platform
 from callbacks import (
+    HubModelCheckpoint,
     SampleGenerationCallback,
     ThroughputMemoryCallback,
 )
@@ -133,7 +134,8 @@ def main() -> None:
     # device count to keep global_batch_size fixed regardless of how many we use.
     accumulation_steps = max(1, config.global_batch_size // (config.batch_size * num_devices))
 
-    checkpoint_callback = ModelCheckpoint(
+    checkpoint_callback = HubModelCheckpoint(
+        repo_id=args.hf_repo,
         dirpath=Path(args.checkpoint_dir),
         filename="checkpoint_step_{step:05d}",
         auto_insert_metric_name=False,
@@ -166,23 +168,6 @@ def main() -> None:
         callbacks=callbacks,
     )
 
-    # Background push to the Hub: polls every 30s, commits only on change, squashes history to stay bounded.
-    scheduler = None
-    if args.hf_repo and is_rank_zero:
-        from huggingface_hub import CommitScheduler
-
-        Path(args.checkpoint_dir).mkdir(parents=True, exist_ok=True)
-
-        # Instantiating starts its own background sync thread.
-        scheduler = CommitScheduler(
-            repo_id=args.hf_repo,
-            repo_type="model",
-            folder_path=Path(args.checkpoint_dir),
-            every=5,
-            private=True,
-            squash_history=True,
-        )
-
     print(f"Platform : {platform}")
     print(f"Model    : {config.n_layer} layers, {config.d_model} dim, {config.n_head} heads")
     print(f"Accumulation : {accumulation_steps} micro-steps")
@@ -193,9 +178,6 @@ def main() -> None:
         datamodule=datamodule,
         ckpt_path=last_ckpt if last_ckpt.exists() else None,
     )
-
-    if scheduler is not None:
-        scheduler.trigger().result()  # ensure the final checkpoint reaches the Hub
 
 
 if __name__ == "__main__":

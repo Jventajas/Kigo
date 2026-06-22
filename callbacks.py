@@ -1,11 +1,14 @@
 """PyTorch Lightning callbacks for Kigo training."""
 
 import time
+from concurrent.futures import Future
 from typing import Any, TYPE_CHECKING, cast
 
 import torch
 import wandb
+from huggingface_hub import CommitInfo, HfApi
 from lightning.pytorch import Callback, LightningModule, Trainer
+from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning.pytorch.loggers import WandbLogger
 from lightning.pytorch.utilities import rank_zero_only
 
@@ -109,3 +112,49 @@ class SampleGenerationCallback(Callback):
                 for sample in samples:
                     table.add_data(step, sample["prompt"], sample["output"])
                 logger.experiment.log({"samples": table}, step=step)
+
+
+class HubModelCheckpoint(ModelCheckpoint):
+    """ModelCheckpoint that mirrors each saved checkpoint to a Hugging Face repo.
+
+    CommitScheduler is the wrong tool here: it is append-only (overwriting a file
+    "might corrupt your repository") and uploads via binary IO buffers, which Xet
+    Storage rejects. Instead we push the checkpoint directory by path right after
+    Lightning writes one, in the background via the SDK's documented `run_as_future`
+    executor -- the same pattern as Lightning's own `LitModelCheckpoint`.
+    """
+
+    def __init__(self, repo_id: str | None, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self.repo_id = repo_id
+        self._api = HfApi()
+        self._pending: Future[CommitInfo] | None = None
+
+    def setup(self, trainer: Trainer, pl_module: LightningModule, stage: str) -> None:
+        super().setup(trainer, pl_module, stage)
+        if self.repo_id is not None and trainer.is_global_zero:
+            self._api.create_repo(self.repo_id, repo_type="model", private=True, exist_ok=True)
+
+    def _save_checkpoint(self, trainer: Trainer, filepath: str) -> None:
+        super()._save_checkpoint(trainer, filepath)
+        if self.repo_id is None or not trainer.is_global_zero or self.dirpath is None:
+            return
+        self._wait()  # surface the prior upload's outcome before queuing the next
+        self._pending = self._api.upload_folder(
+            repo_id=self.repo_id,
+            repo_type="model",
+            folder_path=self.dirpath,
+            run_as_future=True,
+        )
+
+    def teardown(self, trainer: Trainer, pl_module: LightningModule, stage: str) -> None:
+        self._wait()
+
+    def _wait(self) -> None:
+        if self._pending is None:
+            return
+        try:
+            self._pending.result()
+        except Exception as exc:  # keep training alive; CommitScheduler would hide this
+            print(f"[hub] checkpoint upload failed: {exc!r}")
+        self._pending = None
