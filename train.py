@@ -90,8 +90,9 @@ def main() -> None:
         except RepositoryNotFoundError:
             print(f"No Hub repo {args.hf_repo} yet; using local checkpoints if present.")
 
-    # Resume detection
-    last_ckpt = Path(args.checkpoint_dir) / "last.ckpt"
+    # Resume from the highest-numbered checkpoint (zero-padded names sort correctly).
+    ckpts = sorted(Path(args.checkpoint_dir).glob("checkpoint_step_*.ckpt"))
+    resume_ckpt = ckpts[-1] if ckpts else None
 
     # Data
     datamodule = KigoDataModule(config, platform, data_dir=Path(args.data_dir))
@@ -114,7 +115,7 @@ def main() -> None:
         run_id = None
         if is_rank_zero:
             run_id_file = Path(args.checkpoint_dir) / "wandb_run_id"
-            if last_ckpt.exists() and run_id_file.exists():
+            if resume_ckpt is not None and run_id_file.exists():
                 run_id = run_id_file.read_text().strip()
             else:
                 run_id = secrets.token_hex(4)
@@ -140,10 +141,10 @@ def main() -> None:
         filename="checkpoint_step_{step:05d}",
         auto_insert_metric_name=False,
         every_n_train_steps=config.checkpoint_interval,
-        monitor="val/loss",
-        mode="min",
-        save_last=True,
-        save_top_k=1,
+        monitor="step",
+        mode="max",
+        save_last=False,
+        save_top_k=10,
         save_weights_only=False,
         enable_version_counter=False,
     )
@@ -178,7 +179,7 @@ def main() -> None:
     trainer.fit(
         model,
         datamodule=datamodule,
-        ckpt_path=last_ckpt if last_ckpt.exists() else None,
+        ckpt_path=resume_ckpt,
     )
 
 

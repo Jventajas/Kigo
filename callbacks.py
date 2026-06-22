@@ -145,10 +145,10 @@ class HubModelCheckpoint(ModelCheckpoint):
         super()._save_checkpoint(trainer, filepath)
         if self.repo_id is None or not trainer.is_global_zero or self.dirpath is None:
             return
-        # Fire-and-forget: blocking the training thread here would stall rank 0 while
-        # the other ranks wait at the next collective, risking an NCCL timeout.
-        # delete_patterns prunes superseded step checkpoints so the repo mirrors the
-        # local dir (save_top_k keeps one) instead of accumulating every snapshot.
+        # Await the previous push so two upload_folder calls never race the repo.
+        # delete_patterns prunes superseded steps so the repo mirrors the local dir.
+        if self._pending is not None:
+            self._pending.result()
         self._pending = self._api.upload_folder(
             repo_id=self.repo_id,
             repo_type="model",
