@@ -114,6 +114,12 @@ class SampleGenerationCallback(Callback):
                 logger.experiment.log({"samples": table}, step=step)
 
 
+def _report_upload_failure(future: Future[CommitInfo]) -> None:
+    exc = future.exception()
+    if exc is not None:
+        print(f"[hub] checkpoint upload failed: {exc!r}")
+
+
 class HubModelCheckpoint(ModelCheckpoint):
     """ModelCheckpoint that mirrors each saved checkpoint to a Hugging Face repo.
 
@@ -139,22 +145,22 @@ class HubModelCheckpoint(ModelCheckpoint):
         super()._save_checkpoint(trainer, filepath)
         if self.repo_id is None or not trainer.is_global_zero or self.dirpath is None:
             return
-        self._wait()  # surface the prior upload's outcome before queuing the next
+        # Fire-and-forget: blocking the training thread here would stall rank 0 while
+        # the other ranks wait at the next collective, risking an NCCL timeout.
+        # delete_patterns prunes superseded step checkpoints so the repo mirrors the
+        # local dir (save_top_k keeps one) instead of accumulating every snapshot.
         self._pending = self._api.upload_folder(
             repo_id=self.repo_id,
             repo_type="model",
             folder_path=self.dirpath,
+            delete_patterns="checkpoint_step_*.ckpt",
             run_as_future=True,
         )
+        self._pending.add_done_callback(_report_upload_failure)
 
     def teardown(self, trainer: Trainer, pl_module: LightningModule, stage: str) -> None:
-        self._wait()
-
-    def _wait(self) -> None:
-        if self._pending is None:
-            return
-        try:
-            self._pending.result()
-        except Exception as exc:  # keep training alive; CommitScheduler would hide this
-            print(f"[hub] checkpoint upload failed: {exc!r}")
-        self._pending = None
+        if self._pending is not None:
+            try:
+                self._pending.result()  # block only at shutdown so the last push lands
+            except Exception:
+                pass  # failure already reported by the done-callback

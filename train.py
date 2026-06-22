@@ -140,6 +140,8 @@ def main() -> None:
         filename="checkpoint_step_{step:05d}",
         auto_insert_metric_name=False,
         every_n_train_steps=config.checkpoint_interval,
+        monitor="val/loss",
+        mode="min",
         save_last=True,
         save_top_k=1,
         save_weights_only=False,
