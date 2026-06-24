@@ -76,6 +76,11 @@ class Platform:
             major, _minor = torch.cuda.get_device_capability(self.device)
             if major >= 8:
                 torch.set_float32_matmul_precision("high")
+            else:
+                # T4 (sm_75) has no FlashAttention; forbid the MATH SDPA backend so
+                # attention uses the memory-efficient kernel instead of materializing
+                # the full B·H·T·T score matrix.
+                torch.backends.cuda.enable_math_sdp(False)
 
         elif self.name == "cpu":
             # Reserve cores for DataLoader workers so we don't oversubscribe.
