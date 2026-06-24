@@ -46,7 +46,7 @@ def main() -> None:
         logger=False,
         enable_checkpointing=False,
     )
-    suggested = Tuner(trainer).scale_batch_size(model, datamodule=datamodule, mode="power")
+    suggested = Tuner(trainer).scale_batch_size(model, datamodule=datamodule, mode="binsearch")
     print(f"Suggested batch_size = {suggested} (back off ~10% for val/sampling/compile headroom)")
 
 
