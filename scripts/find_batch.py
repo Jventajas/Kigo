@@ -14,7 +14,7 @@ import argparse
 from pathlib import Path
 
 from lightning.pytorch import Trainer
-from lightning.pytorch.tuner import Tuner
+from lightning.pytorch.tuner.tuning import Tuner
 
 from accelerator import get_platform
 from config import load_config
