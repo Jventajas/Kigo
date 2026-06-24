@@ -17,6 +17,7 @@ import subprocess
 import tarfile
 from pathlib import Path
 
+import torch
 from kaggle_secrets import UserSecretsClient  # type: ignore[reportMissingImports]
 
 secrets = UserSecretsClient()
@@ -38,10 +39,9 @@ except Exception:
     batch_size = None
 
 subprocess.run(["git", "clone", "--depth", "1", f"https://{repo_url}", "repo"], check=True)
-# Kaggle ships a CUDA-matched torch; install our package with --no-deps so pip can't
-# replace it with a different build, then add the rest (no torch).
-subprocess.run(["pip", "install", "-e", ".", "--no-deps"], cwd="repo", check=True)
-subprocess.run(["pip", "install", "lightning", "wandb", "huggingface_hub", "torchdata"], check=True)
+# Pin Kaggle's CUDA-matched torch so pip installs the pyproject deps without replacing it.
+Path("repo/torch-pin.txt").write_text(f"torch=={torch.__version__}\n")
+subprocess.run(["pip", "install", "-e", ".", "--constraint", "torch-pin.txt"], cwd="repo", check=True)
 
 # Auto-discover the attached dataset: find the train/ split at any depth (the
 # mount may nest it), or unpack a .tar/.tar.gz archive as a fallback.
