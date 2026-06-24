@@ -87,7 +87,7 @@ def main() -> None:
     if platform.should_compile:
         # Compile the inner GPT, not the LightningModule: compiling the whole
         # module makes Dynamo trace Lightning's self.log() and crash.
-        model.model = cast(GPT, torch.compile(model.model))
+        model.model = cast(GPT, torch.compile(model.model, mode="max-autotune"))
 
     # Logger
     logger: WandbLogger | None = None
