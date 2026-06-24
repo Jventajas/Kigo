@@ -21,6 +21,7 @@ class KigoDataModule(LightningDataModule):
         self.config = config
         self.platform = platform
         self.data_dir = data_dir
+        self.batch_size = config.batch_size
         self.train_dataset: MemmapDataset | None = None
         self.val_dataset: MemmapDataset | None = None
         self.test_dataset: MemmapDataset | None = None
@@ -70,7 +71,7 @@ class KigoDataModule(LightningDataModule):
         workers = self.platform.num_workers // self.platform.device_count()
         return StatefulDataLoader(
             dataset,
-            batch_size=self.config.batch_size,
+            batch_size=self.batch_size,
             shuffle=shuffle,
             num_workers=workers,
             pin_memory=self.platform.pin_memory,

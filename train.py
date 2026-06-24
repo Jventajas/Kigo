@@ -47,36 +47,21 @@ def main() -> None:
         help="HF model repo (e.g. user/kigo) to sync checkpoints with; omit for local-only.",
     )
     parser.add_argument(
-        "--auto-batch",
-        action="store_true",
-        help="Probe the device for the largest micro-batch and override config.batch_size.",
+        "--batch-size",
+        type=int,
+        default=None,
+        help="Override config.batch_size; accumulation is recomputed to keep global_batch_size.",
     )
     args = parser.parse_args()
 
     config = load_config(args.config)
+    if args.batch_size is not None:
+        config.batch_size = args.batch_size
     seed_everything(args.seed, workers=True)
     platform = get_platform(prefer=config.device)
     num_devices = platform.device_count()
     # Under multi-device DDP the script re-runs per rank; only rank 0 touches the Hub.
     is_rank_zero = os.environ.get("LOCAL_RANK", "0") == "0"
-
-    # Auto-tune the micro-batch in a subprocess so its CUDA context -- and the
-    # OOMs it deliberately triggers -- are fully torn down before we train.
-    if args.auto_batch and platform.name == "cuda":
-        import subprocess
-        import sys
-        import tempfile
-
-        probe = Path(__file__).parent / "scripts" / "find_batch_size.py"
-        with tempfile.NamedTemporaryFile(suffix=".txt", delete=False) as f:
-            emit_path = f.name
-        subprocess.run(
-            [sys.executable, str(probe), "--config", args.config, "--emit", emit_path],
-            check=True,
-        )
-        config.batch_size = int(Path(emit_path).read_text().strip())
-        os.unlink(emit_path)
-        print(f"Auto-tuned batch_size = {config.batch_size}")
 
     # Pull the latest checkpoints from the Hub so a run can resume on any machine.
     if args.hf_repo and is_rank_zero:

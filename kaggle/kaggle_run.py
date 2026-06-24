@@ -31,6 +31,12 @@ try:
 except Exception:
     pass
 
+# Optional per-target micro-batch; falls back to the config default if unset.
+try:
+    batch_size = secrets.get_secret("BATCH_SIZE")
+except Exception:
+    batch_size = None
+
 subprocess.run(["git", "clone", "--depth", "1", f"https://{repo_url}", "repo"], check=True)
 # Kaggle ships a CUDA-matched torch; install our package with --no-deps so pip can't
 # replace it with a different build, then add the rest (no torch).
@@ -53,11 +59,12 @@ else:
     train = next(p for p in data_dir.rglob("train") if p.is_dir())
     data_dir = train.parent
 
-subprocess.run(
-    ["python", "train.py",
-     "--config", "config/kigo-162m.yaml",
-     "--data-dir", str(data_dir),
-     "--hf-repo", hf_repo,
-     "--auto-batch"],
-    cwd="repo", check=True,
-)
+train_cmd = [
+    "python", "train.py",
+    "--config", "config/kigo-162m.yaml",
+    "--data-dir", str(data_dir),
+    "--hf-repo", hf_repo,
+]
+if batch_size:
+    train_cmd += ["--batch-size", batch_size]
+subprocess.run(train_cmd, cwd="repo", check=True)
