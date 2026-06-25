@@ -7,7 +7,6 @@ import torch
 from lightning.pytorch import LightningDataModule
 from torch import Tensor
 from torch.utils.data import DataLoader, Sampler
-from torchdata.stateful_dataloader import StatefulDataLoader
 
 from accelerator import Platform
 from config import Config
@@ -15,34 +14,53 @@ from data import MemmapDataset
 
 
 class StepSampler(Sampler[int]):
-    """Deterministic shuffle keyed to (seed, epoch) with a resumable offset, so the data position is a pure function of global_step, independent of worker count and micro-batch size."""
+    """
+    Deterministic shuffle keyed to (seed, epoch) with a resumable offset,
+    so the data position is a pure function of global_step, independent of worker count and micro-batch size.
+    """
 
-    def __init__(self, n: int, seed: int, consumed: int = 0) -> None:
-        self.n = n
+    def __init__(self, samples_per_epoch: int, seed: int, consumed: int = 0) -> None:
+        """
+        Args:
+            samples_per_epoch: Number of samples in one full pass (len of the train dataset).
+            seed: Base seed; the per-epoch shuffle is keyed by ``seed + epoch``.
+            consumed: Cumulative samples seen across all epochs so far (``step * global_batch_size``);
+                split into the resumed epoch and the within-epoch offset.
+        """
+        self.samples_per_epoch = samples_per_epoch
         self.seed = seed
-        self.epoch, self.offset = divmod(consumed, n)
+        # The resume offset only skips into the epoch we resumed within; later epochs start fresh.
+        self.start_epoch, self.start_offset = divmod(consumed, samples_per_epoch)
+        self.epoch = self.start_epoch
+
+    def set_epoch(self, epoch: int) -> None:
+        # Lightning calls this at the start of each epoch; pure function of epoch
+        # means worker copies all compute the same order without shared state.
+        self.epoch = epoch
+
+    def _offset(self) -> int:
+        # Offset only applied when training is resumed, where start_epoch == epoch.
+        return self.start_offset if self.epoch == self.start_epoch else 0
 
     def __iter__(self) -> Iterator[int]:
         generator = torch.Generator().manual_seed(self.seed + self.epoch)
-        order = torch.randperm(self.n, generator=generator).tolist()
-        yield from order[self.offset :]
-        self.epoch += 1
-        self.offset = 0
+        order = torch.randperm(self.samples_per_epoch, generator=generator).tolist()
+        yield from order[self._offset():]
 
     def __len__(self) -> int:
-        return self.n - self.offset
+        return self.samples_per_epoch - self._offset()
 
 
 class KigoDataModule(LightningDataModule):
     """Builds train/val/test DataLoaders from memory-mapped uint32 token shards."""
 
     def __init__(
-        self,
-        config: Config,
-        platform: Platform,
-        data_dir: Path,
-        consumed: int = 0,
-        seed: int = 1337,
+            self,
+            config: Config,
+            platform: Platform,
+            data_dir: Path,
+            consumed: int = 0,
+            seed: int = 1337,
     ) -> None:
         super().__init__()
         self.config = config
@@ -94,15 +112,15 @@ class KigoDataModule(LightningDataModule):
             )
 
     def _dataloader(
-        self,
-        dataset: MemmapDataset,
-        shuffle: bool,
-        drop_last: bool,
-        sampler: Sampler[int] | None = None,
-    ) -> StatefulDataLoader[Tensor]:
+            self,
+            dataset: MemmapDataset,
+            shuffle: bool,
+            drop_last: bool,
+            sampler: Sampler[int] | None = None,
+    ) -> DataLoader[Tensor]:
         # Workers are per-process; split across devices so N ranks don't oversubscribe the host CPU.
         workers = self.platform.num_workers // self.platform.device_count()
-        return StatefulDataLoader(
+        return DataLoader(
             dataset,
             batch_size=self.batch_size,
             shuffle=shuffle,
