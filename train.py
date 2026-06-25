@@ -124,7 +124,7 @@ def main() -> None:
         monitor="step",
         mode="max",
         save_last=False,
-        save_top_k=10,
+        save_top_k=3,
         save_weights_only=False,
         enable_version_counter=False,
     )
