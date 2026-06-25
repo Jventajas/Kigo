@@ -79,8 +79,13 @@ def main() -> None:
     ckpts = sorted(Path(args.checkpoint_dir).glob("checkpoint_step_*.ckpt"))
     resume_ckpt = ckpts[-1] if ckpts else None
 
+    # Reconstruct samples consumed (step is in the filename) so the sampler resumes from the same point on any hardware.
+    resume_consumed = int(resume_ckpt.stem.split("_")[-1]) * config.global_batch_size if resume_ckpt else 0
+
     # Data
-    datamodule = KigoDataModule(config, platform, data_dir=Path(args.data_dir))
+    datamodule = KigoDataModule(
+        config, platform, data_dir=Path(args.data_dir), consumed=resume_consumed, seed=args.seed
+    )
 
     # Model
     model = KigoLightningModule(config, platform)

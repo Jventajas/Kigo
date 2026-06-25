@@ -1,11 +1,12 @@
 """PyTorch Lightning data module for Kigo."""
 
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Any
 
+import torch
 from lightning.pytorch import LightningDataModule
 from torch import Tensor
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Sampler
 from torchdata.stateful_dataloader import StatefulDataLoader
 
 from accelerator import Platform
@@ -13,20 +14,46 @@ from config import Config
 from data import MemmapDataset
 
 
+class StepSampler(Sampler[int]):
+    """Deterministic shuffle keyed to (seed, epoch) with a resumable offset, so the data position is a pure function of global_step, independent of worker count and micro-batch size."""
+
+    def __init__(self, n: int, seed: int, consumed: int = 0) -> None:
+        self.n = n
+        self.seed = seed
+        self.epoch, self.offset = divmod(consumed, n)
+
+    def __iter__(self) -> Iterator[int]:
+        generator = torch.Generator().manual_seed(self.seed + self.epoch)
+        order = torch.randperm(self.n, generator=generator).tolist()
+        yield from order[self.offset :]
+        self.epoch += 1
+        self.offset = 0
+
+    def __len__(self) -> int:
+        return self.n - self.offset
+
+
 class KigoDataModule(LightningDataModule):
     """Builds train/val/test DataLoaders from memory-mapped uint32 token shards."""
 
-    def __init__(self, config: Config, platform: Platform, data_dir: Path) -> None:
+    def __init__(
+        self,
+        config: Config,
+        platform: Platform,
+        data_dir: Path,
+        consumed: int = 0,
+        seed: int = 1337,
+    ) -> None:
         super().__init__()
         self.config = config
         self.platform = platform
         self.data_dir = data_dir
         self.batch_size = config.batch_size
+        self.seed = seed
+        self._consumed = consumed
         self.train_dataset: MemmapDataset | None = None
         self.val_dataset: MemmapDataset | None = None
         self.test_dataset: MemmapDataset | None = None
-        self._train_loader: StatefulDataLoader[Tensor] | None = None
-        self._train_loader_state: dict[str, object] | None = None
 
     def setup(self, stage: str) -> None:
         if stage == "fit":
@@ -66,13 +93,20 @@ class KigoDataModule(LightningDataModule):
                 f"  python scripts/prepare_dataset.py --dataset DATASET {flags}"
             )
 
-    def _dataloader(self, dataset: MemmapDataset, shuffle: bool, drop_last: bool) -> StatefulDataLoader[Tensor]:
+    def _dataloader(
+        self,
+        dataset: MemmapDataset,
+        shuffle: bool,
+        drop_last: bool,
+        sampler: Sampler[int] | None = None,
+    ) -> StatefulDataLoader[Tensor]:
         # Workers are per-process; split across devices so N ranks don't oversubscribe the host CPU.
         workers = self.platform.num_workers // self.platform.device_count()
         return StatefulDataLoader(
             dataset,
             batch_size=self.batch_size,
             shuffle=shuffle,
+            sampler=sampler,
             num_workers=workers,
             pin_memory=self.platform.pin_memory,
             prefetch_factor=2 if workers > 0 else None,
@@ -83,12 +117,9 @@ class KigoDataModule(LightningDataModule):
     def train_dataloader(self) -> DataLoader[Tensor]:
         if self.train_dataset is None:
             raise RuntimeError("train_dataset is not set; call setup('fit') first.")
-        loader = self._dataloader(self.train_dataset, shuffle=True, drop_last=True)
-        if self._train_loader_state is not None:
-            loader.load_state_dict(self._train_loader_state)
-            self._train_loader_state = None
-        self._train_loader = loader
-        return loader
+        # Position the shuffle by samples already consumed so a resume continues from the same spot on any hardware.
+        sampler = StepSampler(len(self.train_dataset), self.seed, self._consumed)
+        return self._dataloader(self.train_dataset, shuffle=False, drop_last=True, sampler=sampler)
 
     def val_dataloader(self) -> DataLoader[Tensor]:
         if self.val_dataset is None:
@@ -105,14 +136,3 @@ class KigoDataModule(LightningDataModule):
             "predict_dataloader is not implemented; "
             "add a prompt dataset and predict_step first."
         )
-
-    def state_dict(self) -> dict[str, Any]:
-        # Lightning persists this into the checkpoint so a mid-epoch resume
-        # continues from the same data position.
-        if self._train_loader is None:
-            return {}
-        return {"train_loader": self._train_loader.state_dict()}
-
-    def load_state_dict(self, state_dict: dict[str, Any]) -> None:
-        # Stashed here; applied when train_dataloader() rebuilds the loader.
-        self._train_loader_state = state_dict.get("train_loader")
