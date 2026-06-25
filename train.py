@@ -8,7 +8,7 @@ from typing import cast
 
 import torch
 from lightning.pytorch import Trainer, seed_everything
-from lightning.pytorch.callbacks import Callback
+from lightning.pytorch.callbacks import Callback, TQDMProgressBar
 from lightning.pytorch.loggers import WandbLogger
 
 from accelerator import get_platform
@@ -132,6 +132,7 @@ def main() -> None:
         checkpoint_callback,
         ThroughputMemoryCallback(config, platform),
         SampleGenerationCallback(config),
+        TQDMProgressBar(refresh_rate=10),
     ]
 
     # Trainer
