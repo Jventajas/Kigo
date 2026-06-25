@@ -59,10 +59,22 @@ else:
     train = next(p for p in data_dir.rglob("train") if p.is_dir())
     data_dir = train.parent
 
+# Keep checkpoints outside the repo clone (like the dataset) so a re-clone is clean.
+checkpoint_dir = "/kaggle/working/checkpoints"
+
+# Pull only the latest checkpoint so a disconnected session resumes without
+# re-downloading the whole top-k repo.
+subprocess.run(
+    ["python", "scripts/pull_checkpoint.py", "--hf-repo", hf_repo, "--checkpoint-dir", checkpoint_dir],
+    cwd="repo",
+    check=True,
+)
+
 train_cmd = [
     "python", "train.py",
     "--config", "config/kigo-162m.yaml",
     "--data-dir", str(data_dir),
+    "--checkpoint-dir", checkpoint_dir,
     "--hf-repo", hf_repo,
 ]
 if batch_size:

@@ -53,29 +53,18 @@ def main() -> None:
         help="Override config.batch_size; accumulation is recomputed to keep global_batch_size.",
     )
     args = parser.parse_args()
-
     config = load_config(args.config)
+
     if args.batch_size is not None:
         config.batch_size = args.batch_size
+
     seed_everything(args.seed, workers=True)
     platform = get_platform(prefer=config.device)
     num_devices = platform.device_count()
     # Under multi-device DDP the script re-runs per rank; only rank 0 touches the Hub.
     is_rank_zero = os.environ.get("LOCAL_RANK", "0") == "0"
 
-    # Pull the latest checkpoints from the Hub so a run can resume on any machine.
-    if args.hf_repo and is_rank_zero:
-        from huggingface_hub import snapshot_download
-        from huggingface_hub.errors import RepositoryNotFoundError
-
-        try:
-            snapshot_download(
-                repo_id=args.hf_repo, repo_type="model", local_dir=args.checkpoint_dir
-            )
-        except RepositoryNotFoundError:
-            print(f"No Hub repo {args.hf_repo} yet; using local checkpoints if present.")
-
-    # Resume from the highest-numbered checkpoint (zero-padded names sort correctly).
+    # Resume from the highest-numbered local checkpoint.
     ckpts = sorted(Path(args.checkpoint_dir).glob("checkpoint_step_*.ckpt"))
     resume_ckpt = ckpts[-1] if ckpts else None
 
