@@ -79,9 +79,10 @@ def main() -> None:
     # Model
     model = KigoLightningModule(config, platform)
     if platform.should_compile:
-        # Compile the inner GPT, not the LightningModule: compiling the whole
-        # module makes Dynamo trace Lightning's self.log() and crash.
-        model.model = cast(GPT, torch.compile(model.model, mode="max-autotune"))
+        # Compile the inner GPT.
+        # no-cudagraphs: tied embedding/lm_head weights are used twice, and CUDA
+        # graphs overwrite the static buffer before backward reads it.
+        model.model = cast(GPT, torch.compile(model.model, mode="max-autotune-no-cudagraphs"))
 
     # Logger
     logger: WandbLogger | None = None
