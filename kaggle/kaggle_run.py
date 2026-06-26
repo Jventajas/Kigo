@@ -62,8 +62,7 @@ else:
 # Keep checkpoints outside the repo clone (like the dataset) so a re-clone is clean.
 checkpoint_dir = "/kaggle/working/checkpoints"
 
-# Pull only the latest checkpoint so a disconnected session resumes without
-# re-downloading the whole top-k repo.
+# Pull the full checkpoint set so the local dir mirrors the Hub before training.
 subprocess.run(
     ["python", "scripts/pull_checkpoint.py", "--hf-repo", hf_repo, "--checkpoint-dir", checkpoint_dir],
     cwd="repo",
